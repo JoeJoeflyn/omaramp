@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "omaramp",
+  "name": "Omaramp",
+  "version": "1.0.0",
+  "author": "JoeJoeflyn",
+  "license": "MIT",
+  "description": "Retro music player for Omarchy powered by cliamp. Winamp-inspired popout panel, live spectrum visualizer, now-playing status, and playlist controls.",
+  "repository": "https://github.com/JoeJoeflyn/omaramp",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Omaramp",
+    "description": "Winamp-inspired retro music player controller and visualizer powered by cliamp.",
+    "category": "Media",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "showTitleInBar": true,
+      "pollIntervalSec": 2
+    },
+    "schema": [
+      {
+        "key": "showTitleInBar",
+        "type": "boolean",
+        "label": "Show track title in bar",
+        "defaultValue": true
+      },
+      {
+        "key": "pollIntervalSec",
+        "type": "integer",
+        "label": "Status refresh interval (seconds)",
+        "min": 1,
+        "max": 10,
+        "step": 1,
+        "defaultValue": 2
+      }
+    ]
+  }
+}
