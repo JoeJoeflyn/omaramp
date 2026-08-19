@@ -28,6 +28,7 @@ Panel {
   readonly property bool isPlaying: playbackState === "playing"
   property string currentTrack: "No track loaded"
   property string currentArtist: ""
+  property string currentUrl: ""
   property string artPath: ""
   property string timeCurrent: "00:00"
   property string timeTotal: "00:00"
@@ -58,6 +59,8 @@ Panel {
   property var visWave: []
   property int visFrame: 0
   property var _visState: ({})
+  property var resumeInfo: null
+  property bool resumeVisible: false
 
   // ---- Lifecycle
   function open() {
@@ -130,6 +133,7 @@ Panel {
   }
 
   function seekTo(sec) { runCmd(["seek", String(sec)]) }
+  function doResume() { runCmd(["resume"]); root.resumeVisible = false; root.loadingVid = "" }
 
   function playUrl(url, title, artist) {
     if (!url || !url.trim()) return
@@ -202,9 +206,16 @@ Panel {
           var data = JSON.parse(text || "{}")
           root.isRunning = data.running === true
           root.playbackState = String(data.state || "stopped")
-          root.currentTrack = String(data.track || "No track loaded")
+          var newTrack = String(data.track || "No track loaded")
+          var newUrl = String(data.url || "")
+          var trackChanged = newTrack !== root.currentTrack
+          root.currentTrack = newTrack
           root.currentArtist = String(data.artist || "")
+          root.currentUrl = newUrl
           root.artPath = String(data.art_path || "")
+          if (trackChanged && playerComp.lyricsVisible && playerComp.lyricsTrack !== newTrack) {
+            playerComp.fetchLyrics()
+          }
           root.timeCurrent = String(data.time_current || "00:00")
           root.timeTotal = String(data.time_total || "00:00")
           root.curSecs = Number(data.cur_secs || 0)
@@ -216,6 +227,12 @@ Panel {
           root.shuffleMode = data.shuffle === true
           root.repeatMode = String(data.repeat || "off")
           root.eqText = String(data.eq || "Custom")
+          if (data.resume && root.playbackState === "stopped") {
+            root.resumeInfo = data.resume
+            root.resumeVisible = true
+          } else {
+            root.resumeVisible = false
+          }
         } catch (e) {}
       }
     }
@@ -269,7 +286,7 @@ Panel {
   // Poll timer
   Timer {
     id: pollTimer
-    interval: root.opened ? 1500 : ((root.settings && root.settings.pollIntervalSec ? root.settings.pollIntervalSec : 2) * 1000)
+    interval: root.opened ? 1000 : ((root.settings && root.settings.pollIntervalSec ? root.settings.pollIntervalSec : 2) * 1000)
     running: true; repeat: true; triggeredOnStart: true
     onTriggered: root.refresh()
   }
@@ -322,9 +339,10 @@ Panel {
 
   Timer {
     id: visTimer
-    interval: 50; running: root.opened && root.isPlaying; repeat: true
+    interval: 35; running: root.opened; repeat: true
     onTriggered: {
       if (root.isPlaying) specFile.reload()
+      else root.updateSpectrumData("")
     }
   }
 
@@ -381,11 +399,31 @@ Panel {
         topPadding: Style.space(6)
         bottomPadding: Style.space(8)
 
-        WheelHandler {
-          acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-          onWheel: function(event) {
-            if (trackList.urlInput.activeFocus) return
-            root.adjustVolume(event.angleDelta.y > 0 ? 5 : -5)
+        BorderSurface {
+          visible: root.resumeVisible
+          width: parent.width; implicitHeight: Style.space(28)
+          radius: Style.cornerRadius
+          color: Qt.rgba(0.04, 0.04, 0.05, 0.95)
+          borderSpec: Border.flat(Color.accent, 1)
+
+          Row {
+            anchors.fill: parent; anchors.margins: Style.space(6); spacing: Style.space(6)
+            Text { anchors.verticalCenter: parent.verticalCenter; text: "\uf0e2"; color: Color.accent; font.family: root.fontFamily; font.pixelSize: Style.font.caption }
+            Text {
+              width: parent.width - Style.space(80); anchors.verticalCenter: parent.verticalCenter
+              text: root.resumeInfo ? "Resume: " + (root.resumeInfo.title || "last track") : ""
+              color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.font.caption; elide: Text.ElideRight
+            }
+            Text {
+              anchors.verticalCenter: parent.verticalCenter; text: "Resume"; color: Color.accent
+              font.family: root.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+              MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.doResume() }
+            }
+            Text {
+              anchors.verticalCenter: parent.verticalCenter; text: "\uf00d"; color: root.dim
+              font.family: root.fontFamily; font.pixelSize: Style.font.caption
+              MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.resumeVisible = false }
+            }
           }
         }
 
@@ -395,7 +433,47 @@ Panel {
 
         PanelSeparator { foreground: root.foreground }
 
-        TrackList { id: trackList; p: root }
+        TrackList { id: trackList; p: root; visible: !playerComp.lyricsVisible }
+
+        // Lyrics view — replaces track list when toggled
+        Item {
+          visible: playerComp.lyricsVisible
+          width: parent.width
+          height: Style.space(200)
+
+          Text {
+            visible: playerComp.lyricsLines.length === 0
+            anchors.centerIn: parent
+            text: "No lyrics found"
+            color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.font.caption
+          }
+
+          Column {
+            anchors.centerIn: parent; width: parent.width - Style.space(16); spacing: Style.space(4)
+
+            Text {
+              width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+              text: {
+                var i = playerComp.lyricsCurrentIdx
+                if (i < 0 || !playerComp.lyricsLines[i]) return "♪"
+                return playerComp.lyricsLines[i].text || "♪"
+              }
+              color: Color.accent; font.family: root.fontFamily
+              font.pixelSize: Style.font.body; font.bold: true
+            }
+
+            Text {
+              width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+              text: {
+                var i = playerComp.lyricsCurrentIdx + 1
+                if (i < 0 || !playerComp.lyricsLines[i]) return ""
+                return playerComp.lyricsLines[i].text || ""
+              }
+              color: Qt.rgba(1, 1, 1, 0.3); font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+          }
+        }
       }
     }
   }

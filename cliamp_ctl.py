@@ -53,37 +53,6 @@ def send_mpv_cmd(cmd_list, timeout=1.0):
         return None
     return None
 
-def send_mpv_cmds(cmd_lists, timeout=1.0):
-    """Batch multiple commands in one socket connection."""
-    if not os.path.exists(SOCK_PATH):
-        return [None] * len(cmd_lists)
-    try:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(timeout)
-        s.connect(SOCK_PATH)
-        payload = "".join(json.dumps({"command": c}) + "\n" for c in cmd_lists)
-        s.sendall(payload.encode("utf-8"))
-        results = []
-        buf = ""
-        while len(results) < len(cmd_lists):
-            chunk = s.recv(4096).decode("utf-8")
-            if not chunk:
-                break
-            buf += chunk
-            lines = buf.split("\n")
-            buf = lines.pop()
-            for line in lines:
-                line = line.strip()
-                if line:
-                    try: results.append(json.loads(line))
-                    except Exception: results.append(None)
-        s.close()
-        while len(results) < len(cmd_lists):
-            results.append(None)
-        return results
-    except Exception:
-        return [None] * len(cmd_lists)
-
 def is_mpv_running():
     if not os.path.exists(SOCK_PATH):
         return False
@@ -199,15 +168,13 @@ def get_status():
         }
 
     try:
-        results = send_mpv_cmds([
-            ["get_property", "time-pos"],
-            ["get_property", "duration"],
-            ["get_property", "pause"],
-            ["get_property", "media-title"],
-            ["get_property", "volume"],
-            ["get_property", "idle-active"]
-        ])
-        pos_res, dur_res, pause_res, title_res, vol_res, idle_res = results
+        np = read_now_playing()
+        pos_res = send_mpv_cmd(["get_property", "time-pos"])
+        dur_res = send_mpv_cmd(["get_property", "duration"])
+        pause_res = send_mpv_cmd(["get_property", "pause"])
+        title_res = send_mpv_cmd(["get_property", "media-title"])
+        vol_res = send_mpv_cmd(["get_property", "volume"])
+        idle_res = send_mpv_cmd(["get_property", "idle-active"])
 
         is_idle = idle_res.get("data") is True if idle_res else False
         is_paused = pause_res.get("data") is True if pause_res else False
@@ -263,12 +230,12 @@ def get_status():
 
         vol = int(vol_res.get("data") or 80) if vol_res else 80
 
-        # Save current position back to now_playing for resume support
-        # Only every ~10s to avoid disk I/O on every status poll
         if state == "playing" and cur_s > 0 and int(cur_s) % 10 == 0:
             np = read_now_playing()
             if np.get("url"):
                 save_now_playing(track, artist, np.get("url", ""), int(cur_s))
+
+        resume = {"title": np.get("title", ""), "artist": np.get("artist", ""), "url": np.get("url", ""), "pos": np.get("pos", 0)} if np.get("url") else None
 
         return {
             "running": True,
@@ -276,6 +243,7 @@ def get_status():
             "track": track,
             "artist": artist,
             "art_path": art_path,
+            "url": np.get("url", ""),
             "time_current": format_seconds(cur_s),
             "time_total": format_seconds(tot_s),
             "cur_secs": int(cur_s),
@@ -285,7 +253,8 @@ def get_status():
             "volume_pct": vol,
             "shuffle": False,
             "repeat": "all",
-            "eq": "Custom"
+            "eq": "Custom",
+            "resume": resume
         }
     except Exception as e:
         return {
@@ -349,26 +318,59 @@ STREAM_FIFO = "/tmp/omaramp_stream"
 def is_youtube_url(url):
     return "youtube.com/watch" in url or "youtu.be/" in url
 
-def fetch_lyrics(title, artist):
-    """Fetch synced lyrics from lrclib.net (free, no API key)."""
+LYRICS_CACHE = {}
+def fetch_lyrics(title, artist, url=""):
+    key = (title or "").strip().lower() + "|" + (artist or "").strip().lower()
+    if key in LYRICS_CACHE:
+        return LYRICS_CACHE[key]
     try:
-        # Clean title — strip "Official Music Video" etc
-        clean_title = re.sub(r'\s*[\(\[].*[\)\]]', '', title or "").strip()
-        clean_artist = (artist or "").strip()
-        url = f"https://lrclib.net/api/search?q={urllib.parse.quote(clean_title)}"
-        res = urllib.request.urlopen(url, timeout=5)
-        data = json.loads(res.read())
-        for entry in data:
-            synced = entry.get("syncedLyrics") or ""
-            plain = entry.get("plainLyrics") or ""
-            if synced:
-                return {"synced": synced, "plain": plain, "source": "lrclib"}
-        # Fall back to plain if no synced
-        for entry in data:
-            plain = entry.get("plainLyrics") or ""
-            if plain:
-                return {"synced": "", "plain": plain, "source": "lrclib"}
-        return {"synced": "", "plain": "", "source": ""}
+        search_title = re.sub(r'\s*[\(\[].*[\)\]]', '', title or "").strip()
+        search_artist = (artist or "").strip()
+
+        # If title is short and we have a YouTube URL, get the real full title
+        if " - " not in search_title and is_youtube_url(url or ""):
+            try:
+                vid = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", url).group(1)
+                r = subprocess.run(["yt-dlp", "--no-warnings", "--print", "%(title)s", f"https://www.youtube.com/watch?v={vid}"],
+                                   capture_output=True, text=True, timeout=5)
+                full_title = r.stdout.strip()
+                if full_title and " - " in full_title:
+                    search_title = re.sub(r'\s*[\(\[].*[\)\]]', '', full_title).strip()
+                    parts = search_title.split(" - ", 1)
+                    search_artist = parts[0].strip()
+                    search_title = parts[1].strip()
+            except Exception:
+                pass
+
+        # If title has "Artist - Track", split it
+        if " - " in search_title:
+            parts = search_title.split(" - ", 1)
+            search_artist = parts[0].strip()
+            search_title = parts[1].strip()
+
+        # Try with artist
+        data = []
+        if search_artist:
+            u = f"https://lrclib.net/api/search?artist_name={urllib.parse.quote(search_artist)}&track_name={urllib.parse.quote(search_title)}"
+            res = urllib.request.urlopen(u, timeout=5)
+            data = json.loads(res.read())
+        # Fallback: track name only
+        if not data:
+            u = f"https://lrclib.net/api/search?q={urllib.parse.quote(search_title)}"
+            res = urllib.request.urlopen(u, timeout=5)
+            data = json.loads(res.read())
+        result = {"synced": "", "plain": "", "source": ""}
+        for e in data:
+            if e.get("syncedLyrics"):
+                result = {"synced": e["syncedLyrics"], "plain": e.get("plainLyrics", ""), "source": "lrclib"}
+                break
+        if not result["synced"]:
+            for e in data:
+                if e.get("plainLyrics"):
+                    result = {"synced": "", "plain": e["plainLyrics"], "source": "lrclib"}
+                    break
+        LYRICS_CACHE[key] = result
+        return result
     except Exception:
         return {"synced": "", "plain": "", "source": ""}
 
@@ -421,36 +423,6 @@ def stream_youtube(url):
         stderr=subprocess.DEVNULL,
         start_new_session=True
     )
-
-def crossfade_next():
-    """Fade out, skip to next track, fade in."""
-    vol_res = send_mpv_cmd(["get_property", "volume"])
-    orig_vol = int(vol_res.get("data") or 80) if vol_res else 80
-    # Fade out over ~0.8s
-    for v in range(orig_vol, 0, -10):
-        send_mpv_cmd(["set_property", "volume", v])
-        time.sleep(0.08)
-    send_mpv_cmd(["playlist-next"])
-    time.sleep(0.3)
-    # Fade in
-    for v in range(0, orig_vol, 10):
-        send_mpv_cmd(["set_property", "volume", v])
-        time.sleep(0.08)
-    send_mpv_cmd(["set_property", "volume", orig_vol])
-
-def crossfade_prev():
-    """Fade out, skip to prev track, fade in."""
-    vol_res = send_mpv_cmd(["get_property", "volume"])
-    orig_vol = int(vol_res.get("data") or 80) if vol_res else 80
-    for v in range(orig_vol, 0, -10):
-        send_mpv_cmd(["set_property", "volume", v])
-        time.sleep(0.08)
-    send_mpv_cmd(["playlist-prev"])
-    time.sleep(0.3)
-    for v in range(0, orig_vol, 10):
-        send_mpv_cmd(["set_property", "volume", v])
-        time.sleep(0.08)
-    send_mpv_cmd(["set_property", "volume", orig_vol])
 
 def play_item(url, title=None, artist=None):
     if not url:
@@ -525,13 +497,17 @@ if __name__ == "__main__":
         send_mpv_cmd(["cycle", "pause"])
         print(json.dumps({"success": True}))
     elif action == "stop":
+        pos_res = send_mpv_cmd(["get_property", "time-pos"])
+        np = read_now_playing()
+        if np.get("url") and pos_res and pos_res.get("data"):
+            save_now_playing(np.get("title", ""), np.get("artist", ""), np.get("url", ""), int(float(pos_res["data"])))
         send_mpv_cmd(["stop"])
         print(json.dumps({"success": True}))
     elif action == "next":
-        crossfade_next()
+        send_mpv_cmd(["playlist-next"])
         print(json.dumps({"success": True}))
     elif action == "prev":
-        crossfade_prev()
+        send_mpv_cmd(["playlist-prev"])
         print(json.dumps({"success": True}))
     elif action == "seek":
         sec = float(sys.argv[2]) if len(sys.argv) > 2 else 0.0
@@ -556,7 +532,8 @@ if __name__ == "__main__":
     elif action == "lyrics":
         t = sys.argv[2] if len(sys.argv) > 2 else ""
         a = sys.argv[3] if len(sys.argv) > 3 else ""
-        print(json.dumps(fetch_lyrics(t, a)))
+        u = sys.argv[4] if len(sys.argv) > 4 else ""
+        print(json.dumps(fetch_lyrics(t, a, u)))
     elif action == "resume_info":
         np = read_now_playing()
         print(json.dumps({"title": np.get("title", ""), "artist": np.get("artist", ""), "url": np.get("url", ""), "pos": np.get("pos", 0)}))
@@ -569,7 +546,12 @@ if __name__ == "__main__":
             pos = int(np.get("pos", 0))
             play_item(url, np.get("title", ""), np.get("artist", ""))
             if pos > 5:
-                time.sleep(1.5)
+                for _ in range(20):
+                    time.sleep(0.5)
+                    dur = send_mpv_cmd(["get_property", "duration"])
+                    if dur and dur.get("data") and float(dur["data"]) > 0:
+                        break
+                time.sleep(1)
                 send_mpv_cmd(["seek", pos, "absolute"])
             print(json.dumps({"success": True}))
     else:
