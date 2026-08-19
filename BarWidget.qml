@@ -74,11 +74,12 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     slotSize: Style.bar.iconSlot
+    active: panelLoader.item && (panelLoader.item.opened || panelLoader.item.isPlaying)
     tooltipText: {
       if (!panelLoader.item) return "Omaramp"
       var t = panelLoader.item.currentTrack
       var a = panelLoader.item.currentArtist
-      if (panelLoader.item.isPlaying) return "Omaramp: " + (a ? a + " - " : "") + t
+      if (panelLoader.item.isPlaying) return "Omaramp (Playing): " + (a ? a + " - " : "") + t
       return "Omaramp (Stopped)"
     }
 
@@ -88,7 +89,7 @@ BarWidget {
 
         Text {
           anchors.centerIn: parent
-          text: "\uf001"
+          text: (panelLoader.item && panelLoader.item.isPlaying) ? "\uf028" : "\uf001"
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.bar.iconFont
           color: (panelLoader.item && (panelLoader.item.opened || panelLoader.item.isPlaying))

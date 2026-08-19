@@ -310,11 +310,12 @@ Panel {
     id: specFile
     path: "/dev/shm/omaramp_spectrum.json"
     watchChanges: true
-    onFileChanged: root.updateSpectrumData()
-    onLoaded: root.updateSpectrumData()
+    printErrors: false
+    onFileChanged: root.updateSpectrumData(text())
+    onLoaded: root.updateSpectrumData(text())
   }
 
-  function updateSpectrumData() {
+  function updateSpectrumData(raw) {
     if (!root.opened) return
     if (!root.isPlaying) {
       var decayedBands = []
@@ -333,8 +334,14 @@ Panel {
       return
     }
 
+    var content = raw
+    if (!content && specFile) {
+      try { content = specFile.text() } catch (e) {}
+    }
+    if (!content) return
+
     try {
-      var arr = JSON.parse(specFile.text())
+      var arr = JSON.parse(content)
       if (Array.isArray(arr) && arr.length >= 24) {
         var newBands = []
         var newPeaks = []
@@ -358,7 +365,10 @@ Panel {
     interval: 35
     running: root.opened
     repeat: true
-    onTriggered: root.updateSpectrumData()
+    onTriggered: {
+      if (root.isPlaying) specFile.reload()
+      else root.updateSpectrumData("")
+    }
   }
 
   // IPC
