@@ -53,6 +53,37 @@ def send_mpv_cmd(cmd_list, timeout=1.0):
         return None
     return None
 
+def send_mpv_cmds(cmd_lists, timeout=1.0):
+    """Batch multiple commands in one socket connection."""
+    if not os.path.exists(SOCK_PATH):
+        return [None] * len(cmd_lists)
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect(SOCK_PATH)
+        payload = "".join(json.dumps({"command": c}) + "\n" for c in cmd_lists)
+        s.sendall(payload.encode("utf-8"))
+        results = []
+        buf = ""
+        while len(results) < len(cmd_lists):
+            chunk = s.recv(4096).decode("utf-8")
+            if not chunk:
+                break
+            buf += chunk
+            lines = buf.split("\n")
+            buf = lines.pop()
+            for line in lines:
+                line = line.strip()
+                if line:
+                    try: results.append(json.loads(line))
+                    except Exception: results.append(None)
+        s.close()
+        while len(results) < len(cmd_lists):
+            results.append(None)
+        return results
+    except Exception:
+        return [None] * len(cmd_lists)
+
 def is_mpv_running():
     if not os.path.exists(SOCK_PATH):
         return False
@@ -168,12 +199,15 @@ def get_status():
         }
 
     try:
-        pos_res = send_mpv_cmd(["get_property", "time-pos"])
-        dur_res = send_mpv_cmd(["get_property", "duration"])
-        pause_res = send_mpv_cmd(["get_property", "pause"])
-        title_res = send_mpv_cmd(["get_property", "media-title"])
-        vol_res = send_mpv_cmd(["get_property", "volume"])
-        idle_res = send_mpv_cmd(["get_property", "idle-active"])
+        results = send_mpv_cmds([
+            ["get_property", "time-pos"],
+            ["get_property", "duration"],
+            ["get_property", "pause"],
+            ["get_property", "media-title"],
+            ["get_property", "volume"],
+            ["get_property", "idle-active"]
+        ])
+        pos_res, dur_res, pause_res, title_res, vol_res, idle_res = results
 
         is_idle = idle_res.get("data") is True if idle_res else False
         is_paused = pause_res.get("data") is True if pause_res else False
@@ -230,7 +264,8 @@ def get_status():
         vol = int(vol_res.get("data") or 80) if vol_res else 80
 
         # Save current position back to now_playing for resume support
-        if state == "playing" and cur_s > 0:
+        # Only every ~10s to avoid disk I/O on every status poll
+        if state == "playing" and cur_s > 0 and int(cur_s) % 10 == 0:
             np = read_now_playing()
             if np.get("url"):
                 save_now_playing(track, artist, np.get("url", ""), int(cur_s))

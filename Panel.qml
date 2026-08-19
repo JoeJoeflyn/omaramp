@@ -302,7 +302,7 @@ Panel {
   // Poll timer
   Timer {
     id: pollTimer
-    interval: root.opened ? 1000 : ((root.settings && root.settings.pollIntervalSec ? root.settings.pollIntervalSec : 2) * 1000)
+    interval: root.opened ? 1500 : ((root.settings && root.settings.pollIntervalSec ? root.settings.pollIntervalSec : 2) * 1000)
     running: true; repeat: true; triggeredOnStart: true
     onTriggered: root.refresh()
   }
