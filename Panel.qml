@@ -910,7 +910,10 @@ Panel {
             bordered: false
             foreground: root.selectedTab === "history" ? Color.accent : root.dim
             accent: Color.accent
-            onClicked: root.selectedTab = "history"
+            onClicked: {
+              root.selectedTab = "history"
+              root.loadHistory()
+            }
           }
 
           Button {
@@ -920,7 +923,10 @@ Panel {
             bordered: false
             foreground: root.selectedTab === "playlists" ? Color.accent : root.dim
             accent: Color.accent
-            onClicked: root.selectedTab = "playlists"
+            onClicked: {
+              root.selectedTab = "playlists"
+              root.loadPlaylists()
+            }
           }
 
           Item { width: Style.space(8) }
@@ -1090,8 +1096,8 @@ Panel {
 
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "\uf001"
-                    color: Color.accent
+                    text: root.loadingVid === modelData.path ? "\uf110" : "\uf04b"
+                    color: root.loadingVid === modelData.path ? Color.accent : (trackMouse.containsMouse ? Color.accent : root.dim)
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
                   }
@@ -1114,7 +1120,7 @@ Panel {
                       var s = modelData.duration_secs || 0
                       var m = Math.floor(s / 60)
                       var sec = s % 60
-                      return m + ":" + (sec < 10 ? "0" + sec : sec)
+                      return (m > 0 || sec > 0) ? (m + ":" + (sec < 10 ? "0" + sec : sec)) : ""
                     }
                     color: root.dim
                     font.family: root.fontFamily
@@ -1128,7 +1134,7 @@ Panel {
                   hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
                   onClicked: {
-                    if (modelData.path) root.playUrl(modelData.path)
+                    if (modelData.path) root.playUrl(modelData.path, modelData.title, modelData.artist)
                   }
                 }
               }
