@@ -153,22 +153,42 @@ Column {
           Row {
             width: parent.width - Style.space(8); anchors.centerIn: parent; spacing: Style.space(6)
 
-            Text {
+            Image {
+              visible: modelData.thumb !== undefined && modelData.thumb !== ""
+              width: Style.space(28); height: Style.space(28)
               anchors.verticalCenter: parent.verticalCenter
-              text: p.loadingVid === modelData.url ? "\uf110" : "\uf04b"
-              color: p.loadingVid === modelData.url ? Color.accent : (searchMouse.containsMouse ? Color.accent : p.dim)
+              source: modelData.thumb ? "file://" + modelData.thumb : ""
+              fillMode: Image.PreserveAspectCrop; sourceSize.width: 56; sourceSize.height: 56
+            }
+
+            Text {
+              visible: p.loadingVid === modelData.url
+              anchors.verticalCenter: parent.verticalCenter
+              text: "\uf110"; color: Color.accent
+              font.family: p.fontFamily; font.pixelSize: Style.font.caption
+              RotationAnimator on rotation { running: visible; from: 0; to: 360; duration: 1000; loops: Animation.Infinite }
+            }
+
+            Text {
+              visible: p.loadingVid !== modelData.url
+              anchors.verticalCenter: parent.verticalCenter
+              text: "\uf04b"
+              color: searchMouse.containsMouse ? Color.accent : p.dim
               font.family: p.fontFamily; font.pixelSize: Style.font.caption
             }
 
             Column {
-              width: parent.width - Style.space(70); anchors.verticalCenter: parent.verticalCenter; spacing: 0
+              width: parent.width - Style.space(12) - durText.implicitWidth - Style.space(12) - (modelData.thumb ? Style.space(34) : 0)
+              anchors.verticalCenter: parent.verticalCenter; spacing: 0
               Text { width: parent.width; text: modelData.title || "Track"; color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true; elide: Text.ElideRight }
               Text { width: parent.width; text: modelData.artist || ""; color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption; elide: Text.ElideRight; visible: modelData.artist !== "" }
             }
 
-            Item { width: Style.space(4) }
-
-            Text { anchors.verticalCenter: parent.verticalCenter; text: modelData.duration || ""; color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption }
+            Text {
+              id: durText; anchors.verticalCenter: parent.verticalCenter
+              text: modelData.duration || ""; color: p.dim
+              font.family: p.fontFamily; font.pixelSize: Style.font.caption
+            }
           }
 
           MouseArea {
@@ -190,23 +210,39 @@ Column {
           Row {
             width: parent.width - Style.space(8); anchors.centerIn: parent; spacing: Style.space(6)
 
-            Text {
+            Image {
+              visible: modelData.thumb !== undefined && modelData.thumb !== ""
+              width: Style.space(28); height: Style.space(28)
               anchors.verticalCenter: parent.verticalCenter
-              text: p.loadingVid === modelData.path ? "\uf110" : "\uf04b"
-              color: p.loadingVid === modelData.path ? Color.accent : (trackMouse.containsMouse ? Color.accent : p.dim)
+              source: modelData.thumb ? "file://" + modelData.thumb : ""
+              fillMode: Image.PreserveAspectCrop; sourceSize.width: 56; sourceSize.height: 56
+            }
+
+            Text {
+              visible: p.loadingVid === modelData.path
+              anchors.verticalCenter: parent.verticalCenter
+              text: "\uf110"; color: Color.accent
+              font.family: p.fontFamily; font.pixelSize: Style.font.caption
+              RotationAnimator on rotation { running: visible; from: 0; to: 360; duration: 1000; loops: Animation.Infinite }
+            }
+
+            Text {
+              visible: p.loadingVid !== modelData.path
+              anchors.verticalCenter: parent.verticalCenter
+              text: "\uf04b"
+              color: trackMouse.containsMouse ? Color.accent : p.dim
               font.family: p.fontFamily; font.pixelSize: Style.font.caption
             }
 
             Text {
-              width: parent.width - Style.space(60); anchors.verticalCenter: parent.verticalCenter
+              width: parent.width - Style.space(12) - recDurText.implicitWidth - Style.space(12) - (modelData.thumb ? Style.space(34) : 0)
+              anchors.verticalCenter: parent.verticalCenter
               text: (modelData.artist ? modelData.artist + " - " : "") + (modelData.title || "Track")
               color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; elide: Text.ElideRight
             }
 
-            Item { width: Style.space(4) }
-
             Text {
-              anchors.verticalCenter: parent.verticalCenter
+              id: recDurText; anchors.verticalCenter: parent.verticalCenter
               text: {
                 var s = modelData.duration_secs || 0
                 var m = Math.floor(s / 60), sec = s % 60

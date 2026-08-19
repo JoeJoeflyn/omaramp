@@ -122,7 +122,7 @@ Item {
       // Track Title Marquee
       BorderSurface {
         width: parent.width
-        implicitHeight: Style.space(26)
+        implicitHeight: Style.space(36)
         radius: Style.space(3)
         color: "#0c0d10"
         borderSpec: Border.flat(Qt.darker(Color.accent, 1.8), 1)
@@ -132,6 +132,15 @@ Item {
           anchors.margins: Style.space(4)
           spacing: Style.space(6)
 
+          Image {
+            visible: p.artPath !== ""
+            width: Style.space(28); height: Style.space(28)
+            anchors.verticalCenter: parent.verticalCenter
+            source: p.artPath !== "" ? "file://" + p.artPath : ""
+            fillMode: Image.PreserveAspectCrop
+            sourceSize.width: 56; sourceSize.height: 56
+          }
+
           Text {
             anchors.verticalCenter: parent.verticalCenter
             text: p.isPlaying ? "\uf04b" : (p.playbackState === "paused" ? "\uf04c" : "\uf04d")
@@ -140,7 +149,7 @@ Item {
           }
 
           Text {
-            width: parent.width - Style.space(20)
+            width: parent.width - Style.space(20) - (p.artPath !== "" ? Style.space(34) : 0)
             anchors.verticalCenter: parent.verticalCenter
             text: {
               if (!p.isRunning) return "daemon idle — click play to start"

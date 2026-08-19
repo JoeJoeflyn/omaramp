@@ -28,6 +28,7 @@ Panel {
   readonly property bool isPlaying: playbackState === "playing"
   property string currentTrack: "No track loaded"
   property string currentArtist: ""
+  property string artPath: ""
   property string timeCurrent: "00:00"
   property string timeTotal: "00:00"
   property int curSecs: 0
@@ -197,6 +198,7 @@ Panel {
           root.playbackState = String(data.state || "stopped")
           root.currentTrack = String(data.track || "No track loaded")
           root.currentArtist = String(data.artist || "")
+          root.artPath = String(data.art_path || "")
           root.timeCurrent = String(data.time_current || "00:00")
           root.timeTotal = String(data.time_total || "00:00")
           root.curSecs = Number(data.cur_secs || 0)

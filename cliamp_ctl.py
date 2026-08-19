@@ -7,6 +7,7 @@ import json
 import socket
 import time
 import re
+import urllib.request
 
 SOCK_PATH = "/tmp/omaramp_mpv.sock"
 CACHE_DIR = os.path.expanduser("~/.cache/omaramp")
@@ -18,10 +19,10 @@ os.makedirs(AUDIO_CACHE_DIR, exist_ok=True)
 os.makedirs(os.path.expanduser("~/.config/cliamp"), exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-def save_now_playing(title, artist):
+def save_now_playing(title, artist, url=""):
     try:
         with open(NOW_PLAYING_PATH, "w", encoding="utf-8") as f:
-            json.dump({"title": title or "", "artist": artist or ""}, f)
+            json.dump({"title": title or "", "artist": artist or "", "url": url or ""}, f)
     except Exception:
         pass
 
@@ -128,6 +129,10 @@ def parse_history(limit=30):
                     else:
                         item[k] = v
             if item.get("title") or item.get("path"):
+                # Add thumbnail path for YouTube URLs
+                m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", item.get("path", ""))
+                if m:
+                    item["thumb"] = os.path.join(AUDIO_CACHE_DIR, f"{m.group(1)}.jpg")
                 entries.append(item)
             if len(entries) >= limit:
                 break
@@ -186,12 +191,21 @@ def get_status():
         raw_title = str(title_res.get("data") or "") if title_res else ""
         artist = ""
         track = raw_title or "Omaramp"
+        art_path = ""
         # When streaming via FIFO, mpv shows the filename — use saved now-playing metadata
         if raw_title in ("omaramp_stream", STREAM_FIFO, os.path.basename(STREAM_FIFO)):
             np = read_now_playing()
             if np.get("title"):
                 track = np["title"]
                 artist = np.get("artist", "")
+                # Look up thumbnail from now-playing URL
+                np_url = np.get("url", "")
+                if np_url:
+                    m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", np_url)
+                    if m:
+                        thumb_f = os.path.join(AUDIO_CACHE_DIR, f"{m.group(1)}.jpg")
+                        if os.path.exists(thumb_f):
+                            art_path = thumb_f
         vid_match = re.match(r"^(?:play_)?([0-9A-Za-z_-]{11})\.(?:mp3|mp4|m4a|webm)$", raw_title)
         if vid_match:
             vid_id = vid_match.group(1)
@@ -204,6 +218,9 @@ def get_status():
                         artist = meta.get("artist", "")
                 except Exception:
                     pass
+            thumb_f = os.path.join(AUDIO_CACHE_DIR, f"{vid_id}.jpg")
+            if os.path.exists(thumb_f):
+                art_path = thumb_f
         elif " - " in raw_title:
             p = raw_title.split(" - ", 1)
             artist = p[0].strip()
@@ -216,6 +233,7 @@ def get_status():
             "state": state,
             "track": track,
             "artist": artist,
+            "art_path": art_path,
             "time_current": format_seconds(cur_s),
             "time_total": format_seconds(tot_s),
             "cur_secs": int(cur_s),
@@ -270,8 +288,16 @@ def search_tracks(query, limit=10):
                     "url": f"https://www.youtube.com/watch?v={vid}",
                     "title": title,
                     "artist": uploader,
-                    "duration": dur
+                    "duration": dur,
+                    "thumb": os.path.join(AUDIO_CACHE_DIR, f"{vid}.jpg")
                 })
+                # Prefetch thumbnail in background so it's ready when shown
+                thumb_f = os.path.join(AUDIO_CACHE_DIR, f"{vid}.jpg")
+                if not os.path.exists(thumb_f):
+                    try:
+                        urllib.request.urlretrieve(f"https://img.youtube.com/vi/{vid}/mqdefault.jpg", thumb_f)
+                    except Exception:
+                        pass
         return results
     except Exception:
         return []
@@ -282,7 +308,7 @@ def is_youtube_url(url):
     return "youtube.com/watch" in url or "youtu.be/" in url
 
 def save_youtube_meta(url, title, artist):
-    """Save title/artist metadata so get_status can show the real track name."""
+    """Save title/artist metadata and fetch thumbnail so get_status can show the real track name + art."""
     vid_id = ""
     m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", url)
     if m:
@@ -294,6 +320,13 @@ def save_youtube_meta(url, title, artist):
                 json.dump({"title": title or "", "artist": artist or ""}, f)
         except Exception:
             pass
+        # Fetch thumbnail (mqdefault.jpg = 320x180, good quality for small UI)
+        thumb_f = os.path.join(AUDIO_CACHE_DIR, f"{vid_id}.jpg")
+        if not os.path.exists(thumb_f):
+            try:
+                urllib.request.urlretrieve(f"https://img.youtube.com/vi/{vid_id}/mqdefault.jpg", thumb_f)
+            except Exception:
+                pass
 
 def stream_youtube(url):
     """Stream YouTube audio to mpv via a FIFO pipe — no disk download."""
@@ -311,10 +344,15 @@ def stream_youtube(url):
         os.mkfifo(STREAM_FIFO)
     except Exception:
         pass
-    # Start yt-dlp streaming to the FIFO — no shell=True, list args prevent injection
+    # Open the FIFO read end ourselves so the writer (yt-dlp) never blocks
+    # even if mpv is slow to open the read end. This prevents the deadlock
+    # where open(FIFO, "wb") blocks before Popen can fork.
+    read_fd = os.open(STREAM_FIFO, os.O_RDONLY | os.O_NONBLOCK)
+    write_fd = os.open(STREAM_FIFO, os.O_WRONLY)
+    os.close(read_fd)  # Close our dummy reader — mpv will take over
     subprocess.Popen(
         ["yt-dlp", "--no-warnings", "-f", "18/best", "-o", "-", url],
-        stdout=open(STREAM_FIFO, "wb"),
+        stdout=os.fdopen(write_fd, "wb"),
         stderr=subprocess.DEVNULL,
         start_new_session=True
     )
@@ -328,12 +366,12 @@ def play_item(url, title=None, artist=None):
     record_history(final_title, final_artist, url, 0)
     if is_youtube_url(url):
         save_youtube_meta(url, final_title, final_artist)
-        save_now_playing(final_title, final_artist)
+        save_now_playing(final_title, final_artist, url)
         stream_youtube(url)
         send_mpv_cmd(["loadfile", STREAM_FIFO, "replace"])
         send_mpv_cmd(["set_property", "pause", False])
         return {"success": True}
-    save_now_playing(final_title, final_artist)
+    save_now_playing(final_title, final_artist, url)
     send_mpv_cmd(["loadfile", url, "replace"])
     send_mpv_cmd(["set_property", "pause", False])
     return {"success": True}
@@ -347,11 +385,11 @@ def queue_item(url, title=None, artist=None):
     record_history(final_title, final_artist, url, 0)
     if is_youtube_url(url):
         save_youtube_meta(url, final_title, final_artist)
-        save_now_playing(final_title, final_artist)
+        save_now_playing(final_title, final_artist, url)
         stream_youtube(url)
         send_mpv_cmd(["loadfile", STREAM_FIFO, "append"])
         return {"success": True}
-    save_now_playing(final_title, final_artist)
+    save_now_playing(final_title, final_artist, url)
     send_mpv_cmd(["loadfile", url, "append"])
     return {"success": True}
 
