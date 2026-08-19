@@ -49,6 +49,7 @@ Panel {
   property string loadingVid: ""
   property string selectedTab: "history" // "search" | "history" | "playlists"
   property string urlInputText: ""
+  property string visMode: "bars" // "bars" | "wave"
 
   // Visualizer animated bands state (24 bands)
   property var visBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -544,43 +545,87 @@ Panel {
             }
 
             // =================================================================
-            // SPECTRUM VISUALIZER CANVAS (Winamp 24-band style)
+            // SPECTRUM VISUALIZER CANVAS (cliamp & Winamp Classic LED / Wave)
             // =================================================================
-            Canvas {
-              id: visCanvas
+            Item {
               width: parent.width
-              height: Style.space(36)
+              height: Style.space(42)
 
-              onPaint: {
-                var ctx = getContext("2d")
-                ctx.clearRect(0, 0, width, height)
+              Canvas {
+                id: visCanvas
+                anchors.fill: parent
 
-                var count = 24
-                var gap = 2
-                var barW = Math.floor((width - (count - 1) * gap) / count)
+                onPaint: {
+                  var ctx = getContext("2d")
+                  ctx.clearRect(0, 0, width, height)
 
-                for (var i = 0; i < count; i++) {
-                  var x = i * (barW + gap)
-                  var val = root.isPlaying ? (root.visBands[i] || 0) : 0.05
-                  var peak = root.isPlaying ? (root.visPeaks[i] || 0) : 0.05
-                  var h = Math.max(2, Math.floor(val * height))
-                  var y = height - h
+                  var count = 24
+                  var gap = 3
+                  var barW = Math.floor((width - (count - 1) * gap) / count)
+                  var numSegments = 14
+                  var segH = 2
+                  var segGap = 1
 
-                  // Draw theme-aware gradient bar
-                  var grad = ctx.createLinearGradient(0, height, 0, 0)
-                  grad.addColorStop(0, Color.accent)
-                  grad.addColorStop(0.7, Color.accent)
-                  grad.addColorStop(1.0, root.urgent)
+                  if (root.visMode === "wave") {
+                    // Oscilloscope Waveform Mode
+                    ctx.lineWidth = 2
+                    ctx.strokeStyle = Color.accent
+                    ctx.beginPath()
+                    var midY = height / 2.0
+                    for (var w = 0; w < count; w++) {
+                      var wx = w * (barW + gap) + barW / 2
+                      var bVal = root.isPlaying ? (root.visBands[w] || 0) : 0
+                      var amp = bVal * (height / 2.2)
+                      var wy = midY + ((w % 2 === 0 ? 1 : -1) * amp)
+                      if (w === 0) ctx.moveTo(wx, wy)
+                      else ctx.lineTo(wx, wy)
+                    }
+                    ctx.stroke()
+                  } else {
+                    // Classic LED Segmented Bars Mode
+                    for (var i = 0; i < count; i++) {
+                      var x = i * (barW + gap)
+                      var val = root.isPlaying ? (root.visBands[i] || 0) : 0.05
+                      var peak = root.isPlaying ? (root.visPeaks[i] || 0) : 0.05
+                      var litSegs = Math.max(1, Math.min(numSegments, Math.round(val * numSegments)))
+                      var peakSeg = Math.min(numSegments - 1, Math.round(peak * (numSegments - 1)))
 
-                  ctx.fillStyle = grad
-                  ctx.fillRect(x, y, barW, h)
+                      // Draw LED segments from bottom to top
+                      for (var s = 0; s < numSegments; s++) {
+                        var segY = height - (s + 1) * (segH + segGap)
+                        var isLit = s < litSegs
+                        var isPeak = s === peakSeg && root.isPlaying && peak > 0.08
 
-                  // Draw falling peak dot
-                  if (root.isPlaying && peak > 0.05) {
-                    var peakY = height - Math.floor(peak * height)
-                    ctx.fillStyle = root.foreground
-                    ctx.fillRect(x, Math.max(0, peakY - 1), barW, 1)
+                        if (isPeak) {
+                          ctx.fillStyle = root.foreground
+                          ctx.fillRect(x, segY, barW, segH)
+                        } else if (isLit) {
+                          if (s > numSegments * 0.75) {
+                            ctx.fillStyle = root.urgent
+                          } else if (s > numSegments * 0.45) {
+                            ctx.fillStyle = Color.accent
+                          } else {
+                            ctx.fillStyle = Color.accent
+                          }
+                          ctx.fillRect(x, segY, barW, segH)
+                        } else {
+                          // Unlit retro LED ghost grid
+                          ctx.fillStyle = "rgba(255, 255, 255, 0.04)"
+                          ctx.fillRect(x, segY, barW, segH)
+                        }
+                      }
+                    }
                   }
+                }
+              }
+
+              // Click to toggle visualizer mode (Bars vs Wave)
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  root.visMode = (root.visMode === "bars") ? "wave" : "bars"
+                  visCanvas.requestPaint()
                 }
               }
             }
