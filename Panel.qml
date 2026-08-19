@@ -43,7 +43,10 @@ Panel {
 
   property var historyList: []
   property var playlistsList: []
-  property string selectedTab: "history" // "history" | "playlists"
+  property var searchResults: []
+  property bool isSearching: false
+  property string searchQuery: ""
+  property string selectedTab: "history" // "search" | "history" | "playlists"
   property string urlInputText: ""
 
   // Visualizer animated bands state (24 bands)
@@ -149,11 +152,25 @@ Panel {
     root.urlInputText = ""
   }
 
-  function queueUrl(url) {
-    if (!url || !url.trim()) return
-    runCmd(["queue", url.trim()])
-    root.urlInputText = ""
-    loadHistory()
+  function searchTracks(query) {
+    if (!query || !query.trim()) return
+    var q = query.trim()
+    if (q.indexOf("http://") === 0 || q.indexOf("https://") === 0) {
+      playUrl(q)
+      return
+    }
+    root.isSearching = true
+    root.searchQuery = q
+    root.selectedTab = "search"
+    searchProc.command = [Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "search", q]
+    searchProc.running = true
+  }
+
+  function clearSearch() {
+    root.searchQuery = ""
+    root.searchResults = []
+    root.isSearching = false
+    root.selectedTab = "history"
   }
 
   function loadPlaylist(name) {
@@ -205,6 +222,21 @@ Panel {
           root.speedText = String(data.speed || "1.00x")
           root.eqText = String(data.eq || "Custom")
         } catch (e) {}
+      }
+    }
+  }
+
+  Process {
+    id: searchProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          root.searchResults = JSON.parse(text || "[]")
+        } catch (e) {
+          root.searchResults = []
+        }
+        root.isSearching = false
       }
     }
   }
@@ -670,76 +702,111 @@ Panel {
         PanelSeparator { foreground: root.foreground }
 
         // =====================================================================
-        // QUICK PLAY / QUEUE INPUT BAR
+        // SEARCH / URL INPUT BAR
         // =====================================================================
         Row {
           width: parent.width
           spacing: Style.space(4)
 
           BorderSurface {
-            width: parent.width - Style.space(64)
+            width: parent.width - Style.space(36)
             implicitHeight: Style.space(26)
             radius: Style.cornerRadius
             color: Color.popups.background
             borderSpec: Border.controlSpec(urlInput.activeFocus ? "focused" : "normal", root.foreground, Color.accent)
 
-            TextInput {
-              id: urlInput
+            Row {
               anchors.fill: parent
               anchors.margins: Style.space(4)
-              verticalAlignment: TextInput.AlignVCenter
-              text: root.urlInputText
-              onTextChanged: root.urlInputText = text
-              color: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              selectByMouse: true
-              onAccepted: root.playUrl(text)
+              spacing: Style.space(4)
 
               Text {
-                visible: !urlInput.text && !urlInput.activeFocus
-                text: "Paste YouTube / URL or track..."
+                anchors.verticalCenter: parent.verticalCenter
+                text: "\uf002"
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
+              }
+
+              TextInput {
+                id: urlInput
+                width: parent.width - Style.space(32)
                 anchors.verticalCenter: parent.verticalCenter
-                anchors.left: parent.left
+                text: root.urlInputText
+                onTextChanged: root.urlInputText = text
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                selectByMouse: true
+                onAccepted: root.searchTracks(text)
+
+                Text {
+                  visible: !urlInput.text && !urlInput.activeFocus
+                  text: "Search songs, artists, or paste URL..."
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  anchors.verticalCenter: parent.verticalCenter
+                  anchors.left: parent.left
+                }
+              }
+
+              // Clear Search Button
+              Text {
+                visible: urlInput.text.length > 0
+                anchors.verticalCenter: parent.verticalCenter
+                text: "\uf00d"
+                color: clearMouse.containsMouse ? Color.accent : root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+
+                MouseArea {
+                  id: clearMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    urlInput.text = ""
+                    root.clearSearch()
+                  }
+                }
               }
             }
           }
 
-          // Play button
+          // Search / Submit button
           PanelActionButton {
-            iconText: "\uf04b"
-            tooltipText: "Play immediately"
+            iconText: root.isSearching ? "\uf110" : "\uf002"
+            tooltipText: "Search"
             foreground: root.foreground
             hoverColor: Color.accent
             fontFamily: root.fontFamily
-            enabled: root.urlInputText.trim().length > 0
-            onClicked: root.playUrl(root.urlInputText)
-          }
-
-          // Queue button
-          PanelActionButton {
-            iconText: "\uf067"
-            tooltipText: "Queue to playlist"
-            foreground: root.foreground
-            hoverColor: Color.accent
-            fontFamily: root.fontFamily
-            enabled: root.urlInputText.trim().length > 0
-            onClicked: root.queueUrl(root.urlInputText)
+            enabled: root.urlInputText.trim().length > 0 && !root.isSearching
+            onClicked: root.searchTracks(root.urlInputText)
           }
         }
 
         // =====================================================================
-        // DRAWER TABS: HISTORY VS PLAYLISTS
+        // DRAWER TABS: SEARCH VS HISTORY VS PLAYLISTS
         // =====================================================================
         Row {
           width: parent.width
-          spacing: Style.space(8)
+          spacing: Style.space(6)
+
+          // Search Results Tab (when active or has results)
+          Button {
+            visible: root.selectedTab === "search" || root.searchResults.length > 0 || root.isSearching
+            text: "Search (" + root.searchResults.length + ")"
+            fontFamily: root.fontFamily
+            fontSize: Style.font.caption
+            bordered: false
+            foreground: root.selectedTab === "search" ? Color.accent : root.dim
+            accent: Color.accent
+            onClicked: root.selectedTab = "search"
+          }
 
           Button {
-            text: "Recently Played (" + root.historyList.length + ")"
+            text: "Recents (" + root.historyList.length + ")"
             fontFamily: root.fontFamily
             fontSize: Style.font.caption
             bordered: false
@@ -790,6 +857,122 @@ Panel {
             id: listCol
             width: parent.width
             spacing: Style.space(2)
+
+            // Searching Status Indicator
+            Item {
+              visible: root.selectedTab === "search" && root.isSearching
+              width: parent.width
+              implicitHeight: Style.space(40)
+
+              Row {
+                anchors.centerIn: parent
+                spacing: Style.space(8)
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "\uf110"
+                  color: Color.accent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                }
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "Searching for \"" + root.searchQuery + "\"..."
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+              }
+            }
+
+            // No Results Found
+            Item {
+              visible: root.selectedTab === "search" && !root.isSearching && root.searchResults.length === 0 && root.searchQuery !== ""
+              width: parent.width
+              implicitHeight: Style.space(40)
+
+              Text {
+                anchors.centerIn: parent
+                text: "No tracks found for \"" + root.searchQuery + "\""
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+            }
+
+            // Search Results Rows
+            Repeater {
+              model: root.selectedTab === "search" && !root.isSearching ? root.searchResults : []
+              delegate: BorderSurface {
+                id: searchRow
+                width: parent.width
+                implicitHeight: Style.space(32)
+                radius: Style.cornerRadius
+                color: searchMouse.containsMouse ? Style.hoverFillFor(root.foreground, Color.accent) : "transparent"
+                borderSpec: Border.none
+
+                Row {
+                  width: parent.width - Style.space(8)
+                  anchors.centerIn: parent
+                  spacing: Style.space(6)
+
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "\uf001"
+                    color: Color.accent
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                  }
+
+                  Column {
+                    width: parent.width - Style.space(70)
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 0
+
+                    Text {
+                      width: parent.width
+                      text: modelData.title || "Track"
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                      elide: Text.ElideRight
+                    }
+
+                    Text {
+                      width: parent.width
+                      text: modelData.artist || ""
+                      color: root.dim
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+                      visible: modelData.artist !== ""
+                    }
+                  }
+
+                  Item { width: Style.space(4) }
+
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: modelData.duration || ""
+                    color: root.dim
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                  }
+                }
+
+                MouseArea {
+                  id: searchMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    if (modelData.url) root.playUrl(modelData.url)
+                  }
+                }
+              }
+            }
 
             // Recently Played Track Rows
             Repeater {

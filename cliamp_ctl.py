@@ -212,6 +212,36 @@ def run_action(cmd, *args):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+def search_tracks(query, limit=10):
+    if not query or not query.strip():
+        return []
+    cmd = [
+        "yt-dlp",
+        "--flat-playlist",
+        "--print", "%(id)s\t%(title)s\t%(uploader)s\t%(duration_string)s",
+        f"ytsearch{limit}:{query.strip()}"
+    ]
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=8.0)
+        results = []
+        for line in (res.stdout or "").splitlines():
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                vid = parts[0].strip()
+                title = parts[1].strip()
+                uploader = parts[2].strip() if len(parts) > 2 else ""
+                dur = parts[3].strip() if len(parts) > 3 else ""
+                results.append({
+                    "id": vid,
+                    "url": f"https://www.youtube.com/watch?v={vid}",
+                    "title": title,
+                    "artist": uploader,
+                    "duration": dur
+                })
+        return results
+    except Exception as e:
+        return []
+
 def stop_daemon():
     try:
         if os.path.exists(SOCK_PATH):
@@ -238,6 +268,9 @@ if __name__ == "__main__":
         print(json.dumps(get_history(lim)))
     elif action == "playlists":
         print(json.dumps(get_playlists()))
+    elif action == "search":
+        q = " ".join(sys.argv[2:]) if len(sys.argv) > 2 else ""
+        print(json.dumps(search_tracks(q, 10)))
     elif action == "stop_daemon":
         print(json.dumps(stop_daemon()))
     elif action in ["play", "pause", "toggle", "next", "prev", "stop", "shuffle", "repeat", "mono"]:
