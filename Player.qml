@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 
@@ -441,7 +442,7 @@ Item {
 
   Process {
     id: lyricsProc
-    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").replace("file://", ""), "lyrics", p.currentTrack, p.currentArtist]
+    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "lyrics", p.currentTrack, p.currentArtist]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {

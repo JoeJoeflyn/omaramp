@@ -282,7 +282,7 @@ Panel {
 
   Process {
     id: resumeProc
-    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").replace("file://", ""), "resume_info"]
+    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "resume_info"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
