@@ -208,8 +208,10 @@ Item {
 
       // Seek Bar
       Item {
+        id: seekBar
         width: parent.width
         implicitHeight: Style.space(12)
+        property int hoverSecs: -1
 
         Rectangle {
           anchors.verticalCenter: parent.verticalCenter
@@ -222,8 +224,34 @@ Item {
           }
         }
 
+        // Hover time tooltip
+        Text {
+          visible: seekBar.hoverSecs >= 0 && p.totalSecs > 0
+          text: {
+            var s = seekBar.hoverSecs
+            var m = Math.floor(s / 60), sec = s % 60
+            return m + ":" + (sec < 10 ? "0" + sec : sec)
+          }
+          color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+          x: Math.max(0, Math.min(parent.width - width, seekMouse.mouseX - width / 2))
+          y: -height - 2
+
+          Rectangle {
+            z: -1; anchors.fill: parent; anchors.margins: -2
+            radius: Style.space(2); color: "#0c0d10"
+            border.color: Color.accent; border.width: 1
+          }
+        }
+
+        // Draggable seek area
         MouseArea {
+          id: seekMouse
           anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+          onPositionChanged: function(mouse) {
+            if (p.totalSecs > 0) seekBar.hoverSecs = Math.floor((mouse.x / width) * p.totalSecs)
+            if (pressed && p.totalSecs > 0) p.seekTo(Math.floor((mouse.x / width) * p.totalSecs))
+          }
+          onExited: seekBar.hoverSecs = -1
           onClicked: function(mouse) {
             if (p.totalSecs > 0) p.seekTo(Math.floor((mouse.x / width) * p.totalSecs))
           }
