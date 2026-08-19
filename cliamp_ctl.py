@@ -12,9 +12,25 @@ SOCK_PATH = "/tmp/omaramp_mpv.sock"
 CACHE_DIR = os.path.expanduser("~/.cache/omaramp")
 AUDIO_CACHE_DIR = os.path.join(CACHE_DIR, "audio")
 HISTORY_PATH = os.path.expanduser("~/.config/cliamp/history.toml")
+NOW_PLAYING_PATH = os.path.join(CACHE_DIR, "now_playing.json")
 
 os.makedirs(AUDIO_CACHE_DIR, exist_ok=True)
 os.makedirs(os.path.expanduser("~/.config/cliamp"), exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+def save_now_playing(title, artist):
+    try:
+        with open(NOW_PLAYING_PATH, "w", encoding="utf-8") as f:
+            json.dump({"title": title or "", "artist": artist or ""}, f)
+    except Exception:
+        pass
+
+def read_now_playing():
+    try:
+        with open(NOW_PLAYING_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 def send_mpv_cmd(cmd_list, timeout=1.0):
     if not os.path.exists(SOCK_PATH):
@@ -169,7 +185,13 @@ def get_status():
         raw_title = str(title_res.get("data") or "") if title_res else ""
         artist = ""
         track = raw_title or "Omaramp"
-        vid_match = re.match(r"^([0-9A-Za-z_-]{11})\.(?:mp3|mp4|m4a|webm)$", raw_title)
+        # When streaming via FIFO, mpv shows the filename — use saved now-playing metadata
+        if raw_title in ("omaramp_stream", STREAM_FIFO, os.path.basename(STREAM_FIFO)):
+            np = read_now_playing()
+            if np.get("title"):
+                track = np["title"]
+                artist = np.get("artist", "")
+        vid_match = re.match(r"^(?:play_)?([0-9A-Za-z_-]{11})\.(?:mp3|mp4|m4a|webm)$", raw_title)
         if vid_match:
             vid_id = vid_match.group(1)
             meta_f = os.path.join(AUDIO_CACHE_DIR, f"{vid_id}.json")
@@ -257,15 +279,67 @@ def search_tracks(query, limit=10):
     except Exception:
         return []
 
+STREAM_FIFO = "/tmp/omaramp_stream"
+
+def is_youtube_url(url):
+    return "youtube.com/watch" in url or "youtu.be/" in url
+
+def save_youtube_meta(url, title, artist):
+    """Save title/artist metadata so get_status can show the real track name."""
+    vid_id = ""
+    m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", url)
+    if m:
+        vid_id = m.group(1)
+    if vid_id and (title or artist):
+        meta_f = os.path.join(AUDIO_CACHE_DIR, f"{vid_id}.json")
+        try:
+            with open(meta_f, "w", encoding="utf-8") as f:
+                json.dump({"title": title or "", "artist": artist or ""}, f)
+        except Exception:
+            pass
+
+def stream_youtube(url):
+    """Stream YouTube audio to mpv via a FIFO pipe — no disk download."""
+    # Kill any previous yt-dlp stream process
+    try:
+        subprocess.run(["pkill", "-f", "yt-dlp.*omaramp_stream"], capture_output=True)
+    except Exception:
+        pass
+    # Recreate the FIFO
+    try:
+        os.remove(STREAM_FIFO)
+    except Exception:
+        pass
+    try:
+        os.mkfifo(STREAM_FIFO)
+    except Exception:
+        pass
+    # Start yt-dlp streaming to stdout, shell redirects to FIFO (blocks until mpv reads)
+    subprocess.Popen(
+        f"yt-dlp --no-warnings -f 18/best -o - {repr(url)} > {STREAM_FIFO}",
+        shell=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True
+    )
+
 def play_item(url, title=None, artist=None):
     if not url:
         return {"success": False}
     start_mpv_daemon()
     final_title = title or "Track"
     final_artist = artist or ""
+    record_history(final_title, final_artist, url, 0)
+    if is_youtube_url(url):
+        save_youtube_meta(url, final_title, final_artist)
+        save_now_playing(final_title, final_artist)
+        stream_youtube(url)
+        send_mpv_cmd(["loadfile", STREAM_FIFO, "replace"])
+        send_mpv_cmd(["set_property", "pause", False])
+        return {"success": True}
+    save_now_playing(final_title, final_artist)
     send_mpv_cmd(["loadfile", url, "replace"])
     send_mpv_cmd(["set_property", "pause", False])
-    record_history(final_title, final_artist, url, 0)
     return {"success": True}
 
 def queue_item(url, title=None, artist=None):
@@ -274,8 +348,15 @@ def queue_item(url, title=None, artist=None):
     start_mpv_daemon()
     final_title = title or "Track"
     final_artist = artist or ""
-    send_mpv_cmd(["loadfile", url, "append"])
     record_history(final_title, final_artist, url, 0)
+    if is_youtube_url(url):
+        save_youtube_meta(url, final_title, final_artist)
+        save_now_playing(final_title, final_artist)
+        stream_youtube(url)
+        send_mpv_cmd(["loadfile", STREAM_FIFO, "append"])
+        return {"success": True}
+    save_now_playing(final_title, final_artist)
+    send_mpv_cmd(["loadfile", url, "append"])
     return {"success": True}
 
 def stop_daemon():

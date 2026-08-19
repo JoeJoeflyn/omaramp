@@ -5,6 +5,36 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 
+import "visualizers/bars.js" as VisBars
+import "visualizers/bars_dot.js" as VisBarsDot
+import "visualizers/bars_outline.js" as VisBarsOutline
+import "visualizers/bricks.js" as VisBricks
+import "visualizers/columns.js" as VisColumns
+import "visualizers/classic_led.js" as VisClassicLED
+import "visualizers/peaks.js" as VisPeaks
+import "visualizers/wave.js" as VisWave
+import "visualizers/scope.js" as VisScope
+import "visualizers/heartbeat.js" as VisHeartbeat
+import "visualizers/retro.js" as VisRetro
+import "visualizers/scatter.js" as VisScatter
+import "visualizers/flame.js" as VisFlame
+import "visualizers/pulse.js" as VisPulse
+import "visualizers/matrix.js" as VisMatrix
+import "visualizers/binary.js" as VisBinary
+import "visualizers/butterfly.js" as VisButterfly
+import "visualizers/sakura.js" as VisSakura
+import "visualizers/firework.js" as VisFirework
+import "visualizers/bubbles.js" as VisBubbles
+import "visualizers/rain.js" as VisRain
+import "visualizers/terrain.js" as VisTerrain
+import "visualizers/logo.js" as VisLogo
+import "visualizers/firefly.js" as VisFirefly
+import "visualizers/geyser.js" as VisGeyser
+import "visualizers/mosaic.js" as VisMosaic
+import "visualizers/sand.js" as VisSand
+import "visualizers/stereo.js" as VisStereo
+import "visualizers/ascii.js" as VisAscii
+
 Panel {
   id: root
   moduleName: "omaramp"
@@ -49,11 +79,15 @@ Panel {
   property string loadingVid: ""
   property string selectedTab: "history" // "search" | "history" | "playlists"
   property string urlInputText: ""
-  property string visMode: "bars" // "bars" | "wave"
+  property string visMode: "bars"
+  property var visModes: ["bars", "bars_dot", "bars_outline", "bricks", "columns", "classic_led", "peaks", "wave", "scope", "heartbeat", "retro", "scatter", "flame", "pulse", "matrix", "binary", "butterfly", "sakura", "firework", "bubbles", "rain", "terrain", "logo", "firefly", "geyser", "mosaic", "sand", "stereo", "ascii"]
 
   // Visualizer animated bands state (24 bands)
   property var visBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
   property var visPeaks: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  property var visWave: []  // raw waveform samples [-1..1] for scope/wave modes
+  property int visFrame: 0  // frame counter for evolving patterns
+  property var _visState: ({})  // persistent state for stateful visualizers
 
   // ---- Lifecycle
   function open() {
@@ -341,12 +375,13 @@ Panel {
     if (!content) return
 
     try {
-      var arr = JSON.parse(content)
-      if (Array.isArray(arr) && arr.length >= 24) {
+      var data = JSON.parse(content)
+      var bands = data.bands || data
+      if (Array.isArray(bands) && bands.length >= 24) {
         var newBands = []
         var newPeaks = []
         for (var i = 0; i < 24; i++) {
-          var target = Math.min(1.0, Math.max(0.02, Number(arr[i]) || 0.0))
+          var target = Math.min(1.0, Math.max(0.02, Number(bands[i]) || 0.0))
           var prevPeak = root.visPeaks[i] || 0.0
           var peak = Math.max(target, prevPeak - 0.03)
           newBands.push(target)
@@ -354,6 +389,8 @@ Panel {
         }
         root.visBands = newBands
         root.visPeaks = newPeaks
+        root.visWave = Array.isArray(data.wave) ? data.wave : []
+        root.visFrame++
         if (visCanvas) visCanvas.requestPaint()
       }
     } catch (e) {}
@@ -572,71 +609,96 @@ Panel {
                   var count = 24
                   var gap = 3
                   var barW = Math.floor((width - (count - 1) * gap) / count)
-                  var numSegments = 14
-                  var segH = 2
-                  var segGap = 1
+                  var mode = root.visMode
+                  var S = 4  // scale: cliamp dot-units → canvas pixels
 
-                  if (root.visMode === "wave") {
-                    // Oscilloscope Waveform Mode
-                    ctx.lineWidth = 2
-                    ctx.strokeStyle = Color.accent
-                    ctx.beginPath()
-                    var midY = height / 2.0
-                    for (var w = 0; w < count; w++) {
-                      var wx = w * (barW + gap) + barW / 2
-                      var bVal = root.isPlaying ? (root.visBands[w] || 0) : 0
-                      var amp = bVal * (height / 2.2)
-                      var wy = midY + ((w % 2 === 0 ? 1 : -1) * amp)
-                      if (w === 0) ctx.moveTo(wx, wy)
-                      else ctx.lineTo(wx, wy)
-                    }
-                    ctx.stroke()
-                  } else {
-                    // Classic LED Segmented Bars Mode
-                    for (var i = 0; i < count; i++) {
-                      var x = i * (barW + gap)
-                      var val = root.isPlaying ? (root.visBands[i] || 0) : 0.05
-                      var peak = root.isPlaying ? (root.visPeaks[i] || 0) : 0.05
-                      var litSegs = Math.max(1, Math.min(numSegments, Math.round(val * numSegments)))
-                      var peakSeg = Math.min(numSegments - 1, Math.round(peak * (numSegments - 1)))
-
-                      // Draw LED segments from bottom to top
-                      for (var s = 0; s < numSegments; s++) {
-                        var segY = height - (s + 1) * (segH + segGap)
-                        var isLit = s < litSegs
-                        var isPeak = s === peakSeg && root.isPlaying && peak > 0.08
-
-                        if (isPeak) {
-                          ctx.fillStyle = root.foreground
-                          ctx.fillRect(x, segY, barW, segH)
-                        } else if (isLit) {
-                          if (s > numSegments * 0.75) {
-                            ctx.fillStyle = root.urgent
-                          } else if (s > numSegments * 0.45) {
-                            ctx.fillStyle = Color.accent
-                          } else {
-                            ctx.fillStyle = Color.accent
-                          }
-                          ctx.fillRect(x, segY, barW, segH)
-                        } else {
-                          // Unlit retro LED ghost grid
-                          ctx.fillStyle = "rgba(255, 255, 255, 0.04)"
-                          ctx.fillRect(x, segY, barW, segH)
-                        }
-                      }
-                    }
+                  // Build data object passed to every visualizer
+                  var d = {
+                    bands: root.visBands,
+                    wave: root.visWave,
+                    frame: root.visFrame,
+                    playing: root.isPlaying,
+                    width: width,
+                    height: height,
+                    S: S,
+                    count: count,
+                    barW: barW,
+                    gap: gap,
+                    accent: Color.accent,
+                    foreground: root.foreground,
+                    dim: root.dim,
+                    state: root._visState
                   }
+
+                  // Dispatch to the appropriate JS module
+                  var renderers = {
+                    "bars": VisBars.render,
+                    "bars_dot": VisBarsDot.render,
+                    "bars_outline": VisBarsOutline.render,
+                    "bricks": VisBricks.render,
+                    "columns": VisColumns.render,
+                    "classic_led": VisClassicLED.render,
+                    "peaks": VisPeaks.render,
+                    "wave": VisWave.render,
+                    "scope": VisScope.render,
+                    "heartbeat": VisHeartbeat.render,
+                    "retro": VisRetro.render,
+                    "scatter": VisScatter.render,
+                    "flame": VisFlame.render,
+                    "pulse": VisPulse.render,
+                    "matrix": VisMatrix.render,
+                    "binary": VisBinary.render,
+                    "butterfly": VisButterfly.render,
+                    "sakura": VisSakura.render,
+                    "firework": VisFirework.render,
+                    "bubbles": VisBubbles.render,
+                    "rain": VisRain.render,
+                    "terrain": VisTerrain.render,
+                    "logo": VisLogo.render,
+                    "firefly": VisFirefly.render,
+                    "geyser": VisGeyser.render,
+                    "mosaic": VisMosaic.render,
+                    "sand": VisSand.render,
+                    "stereo": VisStereo.render,
+                    "ascii": VisAscii.render
+                  }
+
+                  var fn = renderers[mode]
+                  if (fn) fn(ctx, d)
                 }
               }
 
-              // Click to toggle visualizer mode (Bars vs Wave)
+              // Click to cycle visualizer mode
               MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                  root.visMode = (root.visMode === "bars") ? "wave" : "bars"
+                  var idx = root.visModes.indexOf(root.visMode)
+                  root.visMode = root.visModes[(idx + 1) % root.visModes.length]
                   visCanvas.requestPaint()
                 }
+              }
+
+              // Mode label (bottom-right)
+              Text {
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                text: ({
+                  "bars": "Bars", "bars_dot": "Bars Dot", "bars_outline": "Bars Outline",
+                  "bricks": "Bricks", "columns": "Columns", "classic_led": "Classic LED",
+                  "peaks": "Peaks", "wave": "Wave", "scope": "Scope",
+                  "heartbeat": "Heartbeat", "retro": "Retro", "scatter": "Scatter",
+                  "flame": "Flame", "pulse": "Pulse", "matrix": "Matrix",
+                  "binary": "Binary", "butterfly": "Butterfly", "sakura": "Sakura",
+                  "firework": "Firework", "bubbles": "Bubbles", "rain": "Rain",
+                  "terrain": "Terrain", "logo": "Logo", "firefly": "Firefly",
+                  "geyser": "Geyser", "mosaic": "Mosaic", "sand": "Sand",
+                  "stereo": "Stereo", "ascii": "Ascii"
+                })[root.visMode] || root.visMode
+                color: Qt.rgba(1, 1, 1, 0.5)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption * 0.8
+                font.bold: true
               }
             }
 
