@@ -305,38 +305,59 @@ Panel {
     onTriggered: root.refresh()
   }
 
-  // Real live audio FFT spectrum visualizer timer
+  FileView {
+    id: specFile
+    path: "/dev/shm/omaramp_spectrum.json"
+    watchChanges: true
+    onFileChanged: root.updateSpectrumData()
+    onLoaded: root.updateSpectrumData()
+  }
+
+  function updateSpectrumData() {
+    if (!root.opened) return
+    if (!root.isPlaying) {
+      var decayedBands = []
+      var decayedPeaks = []
+      var hasAny = false
+      for (var k = 0; k < 24; k++) {
+        var b = Math.max(0, (root.visBands[k] || 0) * 0.8 - 0.02)
+        var p = Math.max(0, (root.visPeaks[k] || 0) * 0.8 - 0.02)
+        decayedBands.push(b)
+        decayedPeaks.push(p)
+        if (b > 0 || p > 0) hasAny = true
+      }
+      root.visBands = decayedBands
+      root.visPeaks = decayedPeaks
+      if (hasAny && visCanvas) visCanvas.requestPaint()
+      return
+    }
+
+    try {
+      var arr = JSON.parse(specFile.text())
+      if (Array.isArray(arr) && arr.length >= 24) {
+        var newBands = []
+        var newPeaks = []
+        for (var i = 0; i < 24; i++) {
+          var target = Math.min(1.0, Math.max(0.02, Number(arr[i]) || 0.0))
+          var prevPeak = root.visPeaks[i] || 0.0
+          var peak = Math.max(target, prevPeak - 0.03)
+          newBands.push(target)
+          newPeaks.push(peak)
+        }
+        root.visBands = newBands
+        root.visPeaks = newPeaks
+        if (visCanvas) visCanvas.requestPaint()
+      }
+    } catch (e) {}
+  }
+
+  // Real live audio FFT spectrum visualizer decay timer
   Timer {
     id: visTimer
     interval: 35
     running: root.opened
     repeat: true
-    onTriggered: {
-      var realBands = []
-      if (root.isPlaying) {
-        var xhr = new XMLHttpRequest()
-        xhr.open("GET", "file:///dev/shm/omaramp_spectrum.json", false)
-        try {
-          xhr.send()
-          if (xhr.status === 200 || xhr.status === 0) {
-            realBands = JSON.parse(xhr.responseText || "[]")
-          }
-        } catch (e) {}
-      }
-
-      var newBands = []
-      var newPeaks = []
-      for (var i = 0; i < 24; i++) {
-        var target = (realBands.length > i) ? Number(realBands[i]) : 0.0
-        var prevPeak = root.visPeaks[i] || 0.0
-        var peak = Math.max(target, prevPeak - 0.035)
-        newBands.push(target)
-        newPeaks.push(peak)
-      }
-      root.visBands = newBands
-      root.visPeaks = newPeaks
-      if (visCanvas) visCanvas.requestPaint()
-    }
+    onTriggered: root.updateSpectrumData()
   }
 
   // IPC
@@ -545,19 +566,19 @@ Panel {
                   var h = Math.max(2, Math.floor(val * height))
                   var y = height - h
 
-                  // Draw gradient bar
+                  // Draw theme-aware gradient bar
                   var grad = ctx.createLinearGradient(0, height, 0, 0)
-                  grad.addColorStop(0, "#00bb44")
-                  grad.addColorStop(0.65, "#ffff00")
-                  grad.addColorStop(1.0, "#ff2222")
+                  grad.addColorStop(0, Color.accent)
+                  grad.addColorStop(0.7, Color.accent)
+                  grad.addColorStop(1.0, root.urgent)
 
                   ctx.fillStyle = grad
                   ctx.fillRect(x, y, barW, h)
 
                   // Draw falling peak dot
-                  if (root.isPlaying && peak > 0.1) {
+                  if (root.isPlaying && peak > 0.05) {
                     var peakY = height - Math.floor(peak * height)
-                    ctx.fillStyle = "#ffffff"
+                    ctx.fillStyle = root.foreground
                     ctx.fillRect(x, Math.max(0, peakY - 1), barW, 1)
                   }
                 }
@@ -574,7 +595,7 @@ Panel {
                 width: parent.width
                 height: Style.space(4)
                 radius: Style.space(2)
-                color: "#1a1c23"
+                color: Color.popups.border
 
                 Rectangle {
                   width: Math.max(Style.space(4), parent.width * root.progress)
