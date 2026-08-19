@@ -255,6 +255,18 @@ def stop_daemon():
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+def resolve_audio_url(url):
+    if not url:
+        return ""
+    if "youtube.com" in url or "youtu.be" in url:
+        try:
+            r = subprocess.run(["yt-dlp", "-g", "-f", "bestaudio", url], capture_output=True, text=True, timeout=6.0)
+            if r.returncode == 0 and r.stdout.strip():
+                return r.stdout.strip().splitlines()[0]
+        except Exception:
+            pass
+    return url
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(json.dumps(get_status()))
@@ -289,13 +301,16 @@ if __name__ == "__main__":
         pl = sys.argv[2] if len(sys.argv) > 2 else "Recently Played"
         print(json.dumps(run_action("load", pl)))
     elif action == "queue":
-        url = sys.argv[2] if len(sys.argv) > 2 else ""
-        print(json.dumps(run_action("queue", url)))
-    elif action == "play_item":
-        url = sys.argv[2] if len(sys.argv) > 2 else ""
+        raw_url = sys.argv[2] if len(sys.argv) > 2 else ""
+        resolved = resolve_audio_url(raw_url)
         ensure_daemon()
-        run_action("queue", url)
-        time.sleep(0.2)
+        print(json.dumps(run_action("queue", resolved)))
+    elif action == "play_item":
+        raw_url = sys.argv[2] if len(sys.argv) > 2 else ""
+        resolved = resolve_audio_url(raw_url)
+        ensure_daemon()
+        run_action("queue", resolved)
+        time.sleep(0.15)
         print(json.dumps(run_action("play")))
     else:
         print(json.dumps({"error": f"Unknown action {action}"}))

@@ -73,7 +73,7 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    slotSize: (panelLoader.item && panelLoader.item.isPlaying && (root.settings.showTitleInBar !== false)) ? Style.bar.statusSlot : Style.bar.iconSlot
+    slotSize: Style.bar.iconSlot
     tooltipText: {
       if (!panelLoader.item) return "Omaramp"
       var t = panelLoader.item.currentTrack
@@ -86,39 +86,16 @@ BarWidget {
       Item {
         anchors.fill: parent
 
-        Row {
+        Text {
           anchors.centerIn: parent
-          spacing: Style.space(6)
-
-          // Music Note / Equalizer Icon
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: (panelLoader.item && panelLoader.item.isPlaying) ? "\uf8cf" : "\uf001"
-            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-            font.pixelSize: Style.bar.iconFont
-            color: (panelLoader.item && panelLoader.item.opened)
-              ? (root.bar && root.bar.activeColor ? root.bar.activeColor : Color.accent)
-              : ((panelLoader.item && panelLoader.item.isPlaying)
-                  ? Color.accent
-                  : (root.bar ? root.bar.foreground : Color.foreground))
-          }
-
-          // Compact Title Text (when playing)
-          Text {
-            visible: panelLoader.item && panelLoader.item.isPlaying && (root.settings.showTitleInBar !== false)
-            anchors.verticalCenter: parent.verticalCenter
-            text: {
-              if (!panelLoader.item) return ""
-              var a = panelLoader.item.currentArtist
-              var t = panelLoader.item.currentTrack
-              return (a ? a + " - " : "") + t
-            }
-            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-            font.pixelSize: Style.font.bodySmall
-            color: root.bar ? root.bar.foreground : Color.foreground
-            elide: Text.ElideRight
-            maximumLineCount: 1
-          }
+          text: (panelLoader.item && panelLoader.item.isPlaying) ? "\uf8cf" : "\uf001"
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.bar.iconFont
+          color: (panelLoader.item && panelLoader.item.opened)
+            ? (root.bar && root.bar.activeColor ? root.bar.activeColor : Color.accent)
+            : ((panelLoader.item && panelLoader.item.isPlaying)
+                ? Color.accent
+                : (root.bar ? root.bar.foreground : Color.foreground))
         }
       }
     }
