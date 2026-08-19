@@ -46,6 +46,7 @@ Panel {
   property var searchResults: []
   property bool isSearching: false
   property string searchQuery: ""
+  property string loadingVid: ""
   property string selectedTab: "history" // "search" | "history" | "playlists"
   property string urlInputText: ""
 
@@ -148,7 +149,12 @@ Panel {
 
   function playUrl(url, title, artist) {
     if (!url || !url.trim()) return
-    runCmd(["play_item", url.trim(), title || "", artist || ""])
+    var u = url.trim()
+    root.loadingVid = u
+    root.currentTrack = title || "Buffering..."
+    root.currentArtist = artist || ""
+    root.playbackState = "buffering"
+    runCmd(["play_item", u, title || "", artist || ""])
     root.urlInputText = ""
   }
 
@@ -281,6 +287,7 @@ Panel {
   Process {
     id: actionProc
     onExited: function() {
+      root.loadingVid = ""
       root.refresh()
       if (root.opened) {
         loadHistory()
@@ -934,8 +941,8 @@ Panel {
 
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "\uf001"
-                    color: Color.accent
+                    text: root.loadingVid === modelData.url ? "\uf110" : "\uf04b"
+                    color: root.loadingVid === modelData.url ? Color.accent : (searchMouse.containsMouse ? Color.accent : root.dim)
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
                   }

@@ -82,46 +82,41 @@ def get_or_download_audio(url):
     if not vid:
         return url, "Track", ""
 
-    cached_mp3 = os.path.join(AUDIO_CACHE_DIR, f"{vid}.mp3")
     meta_json = os.path.join(AUDIO_CACHE_DIR, f"{vid}.json")
-
     title = "Track"
     artist = ""
 
-    if os.path.exists(cached_mp3) and os.path.getsize(cached_mp3) > 10000:
-        if os.path.exists(meta_json):
-            try:
-                with open(meta_json, "r", encoding="utf-8") as f:
-                    meta = json.load(f)
-                    title = meta.get("title", "Track")
-                    artist = meta.get("artist", "")
-            except Exception:
-                pass
-        return cached_mp3, title, artist
+    if os.path.exists(meta_json):
+        try:
+            with open(meta_json, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+                title = meta.get("title", "Track")
+                artist = meta.get("artist", "")
+        except Exception:
+            pass
 
+    # 1. Instant cache check for any audio/video container
+    import glob
+    candidates = [p for p in glob.glob(os.path.join(AUDIO_CACHE_DIR, f"{vid}.*")) 
+                  if not p.endswith(".part") and not p.endswith(".json") and not p.endswith(".ytdl") and os.path.getsize(p) > 10000]
+    if candidates:
+        return candidates[0], title, artist
+
+    # 2. Download direct audio stream
     out_template = os.path.join(AUDIO_CACHE_DIR, f"{vid}.%(ext)s")
     cmd = [
         "yt-dlp",
         "--extractor-args", "youtube:player_client=mweb",
-        "-x",
-        "--audio-format", "mp3",
+        "-f", "ba/b",
         "-o", out_template,
         f"https://www.youtube.com/watch?v={vid}"
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=30.0)
-    if os.path.exists(cached_mp3):
-        for line in (res.stdout or "").splitlines():
-            if "[download] Destination:" in line:
-                raw_dest = line.split(":", 1)[1].strip()
-                base = os.path.splitext(os.path.basename(raw_dest))[0]
-                if base and base != vid:
-                    title = base
-        try:
-            with open(meta_json, "w", encoding="utf-8") as f:
-                json.dump({"title": title, "artist": artist, "vid": vid}, f)
-        except Exception:
-            pass
-        return cached_mp3, title, artist
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=40.0)
+
+    candidates = [p for p in glob.glob(os.path.join(AUDIO_CACHE_DIR, f"{vid}.*")) 
+                  if not p.endswith(".part") and not p.endswith(".json") and not p.endswith(".ytdl") and os.path.getsize(p) > 10000]
+    if candidates:
+        return candidates[0], title, artist
 
     return url, "Track", ""
 
