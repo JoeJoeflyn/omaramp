@@ -168,19 +168,6 @@ BarWidget {
                 ? (panelLoader.item ? panelLoader.item.dim : Color.foreground)
                 : (root.bar ? root.bar.foreground : Color.foreground))
         }
-
-        // Active playing indicator dot
-        Rectangle {
-          visible: panelLoader.item && panelLoader.item.isPlaying
-          width: Style.space(4)
-          height: Style.space(4)
-          radius: width / 2
-          color: (root.bar && root.bar.activeColor) ? root.bar.activeColor : Color.accent
-          anchors.top: parent.top
-          anchors.topMargin: Style.space(1)
-          anchors.right: parent.right
-          anchors.rightMargin: Style.space(1)
-        }
       }
     }
 
