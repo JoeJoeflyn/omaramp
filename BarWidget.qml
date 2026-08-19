@@ -88,7 +88,7 @@ BarWidget {
 
         Text {
           anchors.centerIn: parent
-          text: (panelLoader.item && panelLoader.item.isPlaying) ? "\uf8cf" : "\uf001"
+          text: "\uf001"
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.bar.iconFont
           color: (panelLoader.item && panelLoader.item.opened)
