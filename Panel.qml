@@ -162,7 +162,7 @@ Panel {
     root.isSearching = true
     root.searchQuery = q
     root.selectedTab = "search"
-    searchProc.command = [Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "search", q]
+    searchProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "search", q]
     searchProc.running = true
   }
 
@@ -192,14 +192,14 @@ Panel {
   }
 
   function runCmd(args) {
-    actionProc.command = [Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", "")].concat(args)
+    actionProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", "")].concat(args)
     actionProc.running = true
   }
 
   // ---- Processes
   Process {
     id: statusProc
-    command: [Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "status"]
+    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "status"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -243,7 +243,7 @@ Panel {
 
   Process {
     id: historyProc
-    command: [Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "history", "30"]
+    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "history", "30"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -258,7 +258,7 @@ Panel {
 
   Process {
     id: playlistsProc
-    command: [Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "playlists"]
+    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "playlists"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
