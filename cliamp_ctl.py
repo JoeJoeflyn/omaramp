@@ -8,6 +8,7 @@ import socket
 import time
 import re
 import urllib.request
+import urllib.parse
 
 SOCK_PATH = "/tmp/omaramp_mpv.sock"
 CACHE_DIR = os.path.expanduser("~/.cache/omaramp")
@@ -19,10 +20,10 @@ os.makedirs(AUDIO_CACHE_DIR, exist_ok=True)
 os.makedirs(os.path.expanduser("~/.config/cliamp"), exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-def save_now_playing(title, artist, url=""):
+def save_now_playing(title, artist, url="", pos=0):
     try:
         with open(NOW_PLAYING_PATH, "w", encoding="utf-8") as f:
-            json.dump({"title": title or "", "artist": artist or "", "url": url or ""}, f)
+            json.dump({"title": title or "", "artist": artist or "", "url": url or "", "pos": pos}, f)
     except Exception:
         pass
 
@@ -228,6 +229,12 @@ def get_status():
 
         vol = int(vol_res.get("data") or 80) if vol_res else 80
 
+        # Save current position back to now_playing for resume support
+        if state == "playing" and cur_s > 0:
+            np = read_now_playing()
+            if np.get("url"):
+                save_now_playing(track, artist, np.get("url", ""), int(cur_s))
+
         return {
             "running": True,
             "state": state,
@@ -307,6 +314,29 @@ STREAM_FIFO = "/tmp/omaramp_stream"
 def is_youtube_url(url):
     return "youtube.com/watch" in url or "youtu.be/" in url
 
+def fetch_lyrics(title, artist):
+    """Fetch synced lyrics from lrclib.net (free, no API key)."""
+    try:
+        # Clean title — strip "Official Music Video" etc
+        clean_title = re.sub(r'\s*[\(\[].*[\)\]]', '', title or "").strip()
+        clean_artist = (artist or "").strip()
+        url = f"https://lrclib.net/api/search?q={urllib.parse.quote(clean_title)}"
+        res = urllib.request.urlopen(url, timeout=5)
+        data = json.loads(res.read())
+        for entry in data:
+            synced = entry.get("syncedLyrics") or ""
+            plain = entry.get("plainLyrics") or ""
+            if synced:
+                return {"synced": synced, "plain": plain, "source": "lrclib"}
+        # Fall back to plain if no synced
+        for entry in data:
+            plain = entry.get("plainLyrics") or ""
+            if plain:
+                return {"synced": "", "plain": plain, "source": "lrclib"}
+        return {"synced": "", "plain": "", "source": ""}
+    except Exception:
+        return {"synced": "", "plain": "", "source": ""}
+
 def save_youtube_meta(url, title, artist):
     """Save title/artist metadata and fetch thumbnail so get_status can show the real track name + art."""
     vid_id = ""
@@ -356,6 +386,36 @@ def stream_youtube(url):
         stderr=subprocess.DEVNULL,
         start_new_session=True
     )
+
+def crossfade_next():
+    """Fade out, skip to next track, fade in."""
+    vol_res = send_mpv_cmd(["get_property", "volume"])
+    orig_vol = int(vol_res.get("data") or 80) if vol_res else 80
+    # Fade out over ~0.8s
+    for v in range(orig_vol, 0, -10):
+        send_mpv_cmd(["set_property", "volume", v])
+        time.sleep(0.08)
+    send_mpv_cmd(["playlist-next"])
+    time.sleep(0.3)
+    # Fade in
+    for v in range(0, orig_vol, 10):
+        send_mpv_cmd(["set_property", "volume", v])
+        time.sleep(0.08)
+    send_mpv_cmd(["set_property", "volume", orig_vol])
+
+def crossfade_prev():
+    """Fade out, skip to prev track, fade in."""
+    vol_res = send_mpv_cmd(["get_property", "volume"])
+    orig_vol = int(vol_res.get("data") or 80) if vol_res else 80
+    for v in range(orig_vol, 0, -10):
+        send_mpv_cmd(["set_property", "volume", v])
+        time.sleep(0.08)
+    send_mpv_cmd(["playlist-prev"])
+    time.sleep(0.3)
+    for v in range(0, orig_vol, 10):
+        send_mpv_cmd(["set_property", "volume", v])
+        time.sleep(0.08)
+    send_mpv_cmd(["set_property", "volume", orig_vol])
 
 def play_item(url, title=None, artist=None):
     if not url:
@@ -433,10 +493,10 @@ if __name__ == "__main__":
         send_mpv_cmd(["stop"])
         print(json.dumps({"success": True}))
     elif action == "next":
-        send_mpv_cmd(["playlist-next"])
+        crossfade_next()
         print(json.dumps({"success": True}))
     elif action == "prev":
-        send_mpv_cmd(["playlist-prev"])
+        crossfade_prev()
         print(json.dumps({"success": True}))
     elif action == "seek":
         sec = float(sys.argv[2]) if len(sys.argv) > 2 else 0.0
@@ -458,5 +518,24 @@ if __name__ == "__main__":
         print(json.dumps(queue_item(url, t, a)))
     elif action == "stop_daemon":
         print(json.dumps(stop_daemon()))
+    elif action == "lyrics":
+        t = sys.argv[2] if len(sys.argv) > 2 else ""
+        a = sys.argv[3] if len(sys.argv) > 3 else ""
+        print(json.dumps(fetch_lyrics(t, a)))
+    elif action == "resume_info":
+        np = read_now_playing()
+        print(json.dumps({"title": np.get("title", ""), "artist": np.get("artist", ""), "url": np.get("url", ""), "pos": np.get("pos", 0)}))
+    elif action == "resume":
+        np = read_now_playing()
+        url = np.get("url", "")
+        if not url:
+            print(json.dumps({"success": False, "error": "no saved track"}))
+        else:
+            pos = int(np.get("pos", 0))
+            play_item(url, np.get("title", ""), np.get("artist", ""))
+            if pos > 5:
+                time.sleep(1.5)
+                send_mpv_cmd(["seek", pos, "absolute"])
+            print(json.dumps({"success": True}))
     else:
         print(json.dumps({"error": f"Unknown action {action}"}))

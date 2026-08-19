@@ -58,6 +58,8 @@ Panel {
   property var visWave: []
   property int visFrame: 0
   property var _visState: ({})
+  property var resumeInfo: null
+  property bool resumeVisible: false
 
   // ---- Lifecycle
   function open() {
@@ -67,6 +69,18 @@ Panel {
     root.refresh()
     loadHistory()
     loadPlaylists()
+    checkResume()
+  }
+
+  function checkResume() {
+    if (root.isPlaying || root.playbackState === "paused") { root.resumeVisible = false; return }
+    resumeProc.running = true
+  }
+
+  function doResume() {
+    runCmd(["resume"])
+    root.resumeVisible = false
+    root.loadingVid = ""
   }
 
   function openFromHotkey() {
@@ -208,6 +222,7 @@ Panel {
           root.timeCurrent = String(data.time_current || "00:00")
           root.timeTotal = String(data.time_total || "00:00")
           root.curSecs = Number(data.cur_secs || 0)
+          if (playerComp.lyricsVisible) playerComp.updateLyricsPosition(root.curSecs)
           root.totalSecs = Number(data.total_secs || 0)
           root.progress = Number(data.progress || 0.0)
           root.volumePct = Number(data.volume_pct || 80)
@@ -262,6 +277,25 @@ Panel {
       root.loadingVid = ""
       root.refresh()
       if (root.opened) loadHistory()
+    }
+  }
+
+  Process {
+    id: resumeProc
+    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").replace("file://", ""), "resume_info"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var d = JSON.parse(text || "{}")
+          if (d.url) {
+            root.resumeInfo = d
+            root.resumeVisible = true
+          } else {
+            root.resumeVisible = false
+          }
+        } catch (e) { root.resumeVisible = false }
+      }
     }
   }
 
@@ -380,6 +414,65 @@ Panel {
         spacing: Style.space(8)
         topPadding: Style.space(6)
         bottomPadding: Style.space(8)
+
+        WheelHandler {
+          acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+          onWheel: function(event) {
+            if (trackList.urlInput.activeFocus) return
+            root.adjustVolume(event.angleDelta.y > 0 ? 5 : -5)
+          }
+        }
+
+        // Resume banner
+        BorderSurface {
+          visible: root.resumeVisible
+          width: parent.width
+          implicitHeight: Style.space(28)
+          radius: Style.cornerRadius
+          color: Qt.rgba(0.04, 0.04, 0.05, 0.95)
+          borderSpec: Border.flat(Color.accent, 1)
+
+          Row {
+            anchors.fill: parent; anchors.margins: Style.space(6); spacing: Style.space(6)
+
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              text: "\uf0e2"; color: Color.accent
+              font.family: root.fontFamily; font.pixelSize: Style.font.caption
+            }
+
+            Text {
+              width: parent.width - Style.space(80)
+              anchors.verticalCenter: parent.verticalCenter
+              text: root.resumeInfo ? "Resume: " + (root.resumeInfo.title || "last track") : ""
+              color: root.foreground
+              font.family: root.fontFamily; font.pixelSize: Style.font.caption
+              elide: Text.ElideRight
+            }
+
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              text: "Resume"; color: Color.accent
+              font.family: root.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+
+              MouseArea {
+                anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                onClicked: root.doResume()
+              }
+            }
+
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              text: "\uf00d"; color: root.dim
+              font.family: root.fontFamily; font.pixelSize: Style.font.caption
+
+              MouseArea {
+                anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                onClicked: root.resumeVisible = false
+              }
+            }
+          }
+        }
 
         Player { id: playerComp; p: root }
 

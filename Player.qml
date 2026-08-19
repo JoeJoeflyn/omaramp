@@ -38,7 +38,54 @@ Item {
   property var p  // Panel root
 
   width: parent ? parent.width : 0
-  implicitHeight: hud.implicitHeight + Style.space(12)
+  implicitHeight: hud.implicitHeight + Style.space(12) + (lyricsVisible ? lyricsPanel.height : 0)
+
+  property bool lyricsVisible: false
+  property string lyricsSynced: ""
+  property string lyricsPlain: ""
+  property var lyricsLines: []
+  property int lyricsCurrentIdx: -1
+
+  function toggleLyrics() {
+    lyricsVisible = !lyricsVisible
+    if (lyricsVisible && lyricsLines.length === 0) fetchLyrics()
+  }
+
+  function fetchLyrics() {
+    lyricsProc.running = true
+  }
+
+  function parseSyncedLyrics(raw) {
+    // Parse [mm:ss.xx] timestamped lines
+    var lines = []
+    var re = /\[(\d+):(\d+\.\d+)\](.*)/g
+    var match
+    while ((match = re.exec(raw)) !== null) {
+      var min = parseInt(match[1])
+      var sec = parseFloat(match[2])
+      lines.push({ time: min * 60 + sec, text: match[3].trim() })
+    }
+    if (lines.length === 0 && raw) {
+      // Plain lyrics — no timestamps
+      lyricsPlain = raw
+      lyricsLines = raw.split("\n").map(function(t) { return { time: -1, text: t.trim() } })
+    } else {
+      lyricsLines = lines
+    }
+  }
+
+  function updateLyricsPosition(curSecs) {
+    if (!lyricsVisible || lyricsLines.length === 0) return
+    var idx = -1
+    for (var i = 0; i < lyricsLines.length; i++) {
+      if (lyricsLines[i].time >= 0 && lyricsLines[i].time <= curSecs) idx = i
+      else if (lyricsLines[i].time >= 0 && lyricsLines[i].time > curSecs) break
+    }
+    if (idx !== lyricsCurrentIdx) {
+      lyricsCurrentIdx = idx
+      lyricsFlick.contentY = Math.max(0, idx * Style.space(16) - lyricsFlick.height / 2 + Style.space(8))
+    }
+  }
 
   readonly property var _renderers: ({
     "bars": VisBars.render, "bars_dot": VisBarsDot.render, "bars_outline": VisBarsOutline.render,
@@ -115,6 +162,19 @@ Item {
             text: p.timeCurrent + " / " + p.timeTotal
             color: p.isPlaying ? "#00ff66" : p.dim
             font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+          }
+
+          // Lyrics toggle
+          Text {
+            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+            text: "\uf086"
+            color: root.lyricsVisible ? Color.accent : (lyricsMouse.containsMouse ? Color.accent : p.dim)
+            font.family: p.fontFamily; font.pixelSize: Style.font.caption
+
+            MouseArea {
+              id: lyricsMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+              onClicked: root.toggleLyrics()
+            }
           }
         }
       }
@@ -198,11 +258,130 @@ Item {
           }
         }
 
+        // Mode label — click to open picker grid
         Text {
+          id: visLabel
           anchors.right: parent.right; anchors.bottom: parent.bottom
           text: root._modeLabels[p.visMode] || p.visMode
           color: Qt.rgba(1, 1, 1, 0.5)
           font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8; font.bold: true
+
+          MouseArea {
+            id: labelMouse
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            hoverEnabled: true
+            onClicked: visPicker.visible = !visPicker.visible
+            onEntered: parent.color = Color.accent
+            onExited: parent.color = Qt.rgba(1, 1, 1, 0.5)
+          }
+        }
+
+        // Visualizer picker grid
+        BorderSurface {
+          id: visPicker
+          visible: false
+          anchors.fill: parent
+          color: Qt.rgba(0.05, 0.05, 0.06, 0.95)
+          radius: Style.cornerRadius
+          borderSpec: Border.flat(Color.accent, 1)
+
+          Flickable {
+            anchors.fill: parent
+            anchors.margins: Style.space(4)
+            contentWidth: grid.width; contentHeight: grid.height
+            clip: true; boundsBehavior: Flickable.StopAtBounds
+
+            Grid {
+              id: grid
+              columns: 4; spacing: Style.space(2)
+
+              Repeater {
+                model: p.visModes
+                delegate: Rectangle {
+                  width: (grid.width - Style.space(6)) / 4
+                  height: Style.space(16)
+                  radius: Style.space(2)
+                  color: modelData === p.visMode ? Color.accent : (modeMouse.containsMouse ? Qt.lighter(Color.accent, 1.5) : "transparent")
+                  border.color: modelData === p.visMode ? Color.accent : Qt.rgba(1, 1, 1, 0.1)
+                  border.width: 1
+
+                  Text {
+                    anchors.centerIn: parent
+                    text: root._modeLabels[modelData] || modelData
+                    color: modelData === p.visMode ? "#0c0d10" : p.foreground
+                    font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.7
+                    font.bold: modelData === p.visMode
+                    elide: Text.ElideRight
+                    width: parent.width - Style.space(4)
+                    horizontalAlignment: Text.AlignHCenter
+                  }
+
+                  MouseArea {
+                    id: modeMouse
+                    anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                      p.visMode = modelData
+                      visCanvas.requestPaint()
+                      visPicker.visible = false
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // Click outside grid to close
+          MouseArea {
+            anchors.fill: parent
+            z: -1
+            onClicked: visPicker.visible = false
+          }
+        }
+      }
+
+      // Lyrics panel
+      BorderSurface {
+        id: lyricsPanel
+        visible: root.lyricsVisible
+        width: parent.width
+        implicitHeight: Style.space(120)
+        radius: Style.cornerRadius
+        color: Qt.rgba(0.04, 0.04, 0.05, 0.9)
+        borderSpec: Border.flat(Qt.rgba(1, 1, 1, 0.08), 1)
+
+        Flickable {
+          id: lyricsFlick
+          anchors.fill: parent; anchors.margins: Style.space(4)
+          contentWidth: width; contentHeight: lyricsCol.implicitHeight
+          clip: true; boundsBehavior: Flickable.StopAtBounds
+
+          Column {
+            id: lyricsCol
+            width: parent.width; spacing: Style.space(2)
+
+            Repeater {
+              model: root.lyricsLines
+              delegate: Text {
+                width: parent.width
+                text: modelData.text || "♪"
+                color: index === root.lyricsCurrentIdx ? Color.accent : (modelData.text ? Qt.rgba(1, 1, 1, 0.3) : Qt.rgba(1, 1, 1, 0.1))
+                font.family: p.fontFamily
+                font.pixelSize: index === root.lyricsCurrentIdx ? Style.font.bodySmall : Style.font.caption
+                font.bold: index === root.lyricsCurrentIdx
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+              }
+            }
+
+            Text {
+              visible: root.lyricsLines.length === 0
+              width: parent.width
+              text: "No lyrics found"
+              color: p.dim; horizontalAlignment: Text.AlignHCenter
+              font.family: p.fontFamily; font.pixelSize: Style.font.caption
+            }
+          }
         }
       }
 
@@ -256,6 +435,22 @@ Item {
             if (p.totalSecs > 0) p.seekTo(Math.floor((mouse.x / width) * p.totalSecs))
           }
         }
+      }
+    }
+  }
+
+  Process {
+    id: lyricsProc
+    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").replace("file://", ""), "lyrics", p.currentTrack, p.currentArtist]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var d = JSON.parse(text || "{}")
+          if (d.synced) root.parseSyncedLyrics(d.synced)
+          else if (d.plain) root.parseSyncedLyrics(d.plain)
+          else root.lyricsLines = []
+        } catch (e) { root.lyricsLines = [] }
       }
     }
   }
