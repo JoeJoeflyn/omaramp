@@ -9,7 +9,11 @@ import time
 import re
 
 SOCK_PATH = "/tmp/omaramp_mpv.sock"
+CACHE_DIR = os.path.expanduser("~/.cache/omaramp")
+AUDIO_CACHE_DIR = os.path.join(CACHE_DIR, "audio")
 HISTORY_PATH = os.path.expanduser("~/.config/cliamp/history.toml")
+
+os.makedirs(AUDIO_CACHE_DIR, exist_ok=True)
 os.makedirs(os.path.expanduser("~/.config/cliamp"), exist_ok=True)
 
 def send_mpv_cmd(cmd_list, timeout=1.0):
@@ -23,9 +27,13 @@ def send_mpv_cmd(cmd_list, timeout=1.0):
         s.sendall(payload.encode("utf-8"))
         res = s.recv(4096).decode("utf-8")
         s.close()
-        return json.loads(res.strip().splitlines()[0])
+        for line in res.splitlines():
+            line = line.strip()
+            if line:
+                return json.loads(line)
     except Exception:
         return None
+    return None
 
 def is_mpv_running():
     if not os.path.exists(SOCK_PATH):
@@ -33,7 +41,7 @@ def is_mpv_running():
     res = send_mpv_cmd(["get_property", "idle-active"])
     return res is not None and res.get("error") == "success"
 
-def start_mpv_daemon(initial_url=None):
+def start_mpv_daemon():
     if not is_mpv_running():
         if os.path.exists(SOCK_PATH):
             try:
@@ -44,15 +52,68 @@ def start_mpv_daemon(initial_url=None):
             "mpv",
             "--no-video",
             "--idle=yes",
+            "--ao=pipewire,pulse,alsa",
             f"--input-ipc-server={SOCK_PATH}",
-            "--ytdl-format=bestaudio/best",
             "--keep-open=yes",
             "--volume=80"
         ]
-        if initial_url:
-            cmd.append(initial_url)
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-        time.sleep(0.3)
+        for _ in range(15):
+            time.sleep(0.1)
+            if os.path.exists(SOCK_PATH):
+                break
+
+def extract_vid(url):
+    m = re.search(r"(?:v=|\/|be\/)([0-9A-Za-z_-]{11})", url)
+    return m.group(1) if m else None
+
+def get_or_download_audio(url):
+    vid = extract_vid(url)
+    if not vid:
+        return url, "Track", ""
+
+    cached_mp3 = os.path.join(AUDIO_CACHE_DIR, f"{vid}.mp3")
+    meta_json = os.path.join(AUDIO_CACHE_DIR, f"{vid}.json")
+
+    title = "Track"
+    artist = ""
+
+    if os.path.exists(cached_mp3) and os.path.getsize(cached_mp3) > 10000:
+        if os.path.exists(meta_json):
+            try:
+                with open(meta_json, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                    title = meta.get("title", "Track")
+                    artist = meta.get("artist", "")
+            except Exception:
+                pass
+        return cached_mp3, title, artist
+
+    out_template = os.path.join(AUDIO_CACHE_DIR, f"{vid}.%(ext)s")
+    cmd = [
+        "yt-dlp",
+        "--extractor-args", "youtube:player_client=mweb",
+        "-x",
+        "--audio-format", "mp3",
+        "-o", out_template,
+        f"https://www.youtube.com/watch?v={vid}"
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=30.0)
+    if os.path.exists(cached_mp3):
+        for line in (res.stdout or "").splitlines():
+            if "[download] Destination:" in line:
+                raw_dest = line.split(":", 1)[1].strip()
+                base = os.path.splitext(os.path.basename(raw_dest))[0]
+                if base and base != vid:
+                    title = base
+        try:
+            with open(meta_json, "w", encoding="utf-8") as f:
+                json.dump({"title": title, "artist": artist, "vid": vid}, f)
+        except Exception:
+            pass
+        return cached_mp3, title, artist
+
+    return url, "Track", ""
 
 def record_history(title, artist, url, dur):
     try:
@@ -148,7 +209,19 @@ def get_status():
         raw_title = str(title_res.get("data") or "") if title_res else ""
         artist = ""
         track = raw_title or "Omaramp"
-        if " - " in raw_title:
+        vid_match = re.match(r"^([0-9A-Za-z_-]{11})\.(?:mp3|mp4|m4a|webm)$", raw_title)
+        if vid_match:
+            vid_id = vid_match.group(1)
+            meta_f = os.path.join(AUDIO_CACHE_DIR, f"{vid_id}.json")
+            if os.path.exists(meta_f):
+                try:
+                    with open(meta_f, "r", encoding="utf-8") as f:
+                        meta = json.load(f)
+                        track = meta.get("title", track)
+                        artist = meta.get("artist", "")
+                except Exception:
+                    pass
+        elif " - " in raw_title:
             p = raw_title.split(" - ", 1)
             artist = p[0].strip()
             track = p[1].strip()
@@ -224,35 +297,42 @@ def search_tracks(query, limit=10):
     except Exception:
         return []
 
-def play_item(url):
+def play_item(url, title=None, artist=None):
     if not url:
         return {"success": False}
     start_mpv_daemon()
-    send_mpv_cmd(["loadfile", url, "replace"])
+    local_path, t, a = get_or_download_audio(url)
+    final_title = title or t
+    final_artist = artist or a
+    vid = extract_vid(url)
+    if vid:
+        meta_json = os.path.join(AUDIO_CACHE_DIR, f"{vid}.json")
+        try:
+            with open(meta_json, "w", encoding="utf-8") as f:
+                json.dump({"title": final_title, "artist": final_artist, "vid": vid}, f)
+        except Exception:
+            pass
+    send_mpv_cmd(["loadfile", local_path, "replace"])
     send_mpv_cmd(["set_property", "pause", False])
-    # Fetch title & record history in background
-    def fetch_meta():
-        time.sleep(1.5)
-        st = send_mpv_cmd(["get_property", "media-title"])
-        dur = send_mpv_cmd(["get_property", "duration"])
-        t = st.get("data") if st else ""
-        d = dur.get("data") if dur else 0
-        if t:
-            art = ""
-            tr = t
-            if " - " in t:
-                p = t.split(" - ", 1)
-                art, tr = p[0].strip(), p[1].strip()
-            record_history(tr, art, url, d)
-    import threading
-    threading.Thread(target=fetch_meta, daemon=True).start()
-    return {"success": True}
+    record_history(final_title, final_artist, url, 0)
+    return {"success": True, "file": local_path}
 
-def queue_item(url):
+def queue_item(url, title=None, artist=None):
     if not url:
         return {"success": False}
     start_mpv_daemon()
-    send_mpv_cmd(["loadfile", url, "append"])
+    local_path, t, a = get_or_download_audio(url)
+    final_title = title or t
+    final_artist = artist or a
+    vid = extract_vid(url)
+    if vid:
+        meta_json = os.path.join(AUDIO_CACHE_DIR, f"{vid}.json")
+        try:
+            with open(meta_json, "w", encoding="utf-8") as f:
+                json.dump({"title": final_title, "artist": final_artist, "vid": vid}, f)
+        except Exception:
+            pass
+    send_mpv_cmd(["loadfile", local_path, "append"])
     return {"success": True}
 
 def stop_daemon():
@@ -310,10 +390,14 @@ if __name__ == "__main__":
         print(json.dumps({"success": True}))
     elif action == "play_item":
         url = sys.argv[2] if len(sys.argv) > 2 else ""
-        print(json.dumps(play_item(url)))
+        t = sys.argv[3] if len(sys.argv) > 3 else ""
+        a = sys.argv[4] if len(sys.argv) > 4 else ""
+        print(json.dumps(play_item(url, t, a)))
     elif action == "queue":
         url = sys.argv[2] if len(sys.argv) > 2 else ""
-        print(json.dumps(queue_item(url)))
+        t = sys.argv[3] if len(sys.argv) > 3 else ""
+        a = sys.argv[4] if len(sys.argv) > 4 else ""
+        print(json.dumps(queue_item(url, t, a)))
     elif action == "stop_daemon":
         print(json.dumps(stop_daemon()))
     else:

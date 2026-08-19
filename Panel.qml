@@ -146,10 +146,17 @@ Panel {
     runCmd(["seek", String(sec)])
   }
 
-  function playUrl(url) {
+  function playUrl(url, title, artist) {
     if (!url || !url.trim()) return
-    runCmd(["play_item", url.trim()])
+    runCmd(["play_item", url.trim(), title || "", artist || ""])
     root.urlInputText = ""
+  }
+
+  function queueUrl(url, title, artist) {
+    if (!url || !url.trim()) return
+    runCmd(["queue", url.trim(), title || "", artist || ""])
+    root.urlInputText = ""
+    loadHistory()
   }
 
   function searchTracks(query) {
@@ -968,7 +975,7 @@ Panel {
                   hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
                   onClicked: {
-                    if (modelData.url) root.playUrl(modelData.url)
+                    if (modelData.url) root.playUrl(modelData.url, modelData.title, modelData.artist)
                   }
                 }
               }
