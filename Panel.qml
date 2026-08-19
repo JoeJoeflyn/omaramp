@@ -39,6 +39,7 @@ Panel {
   property bool shuffleMode: false
   property string repeatMode: "off"
   property string eqText: "Custom"
+  property int _preMuteVol: 80
 
   property var historyList: []
   property var playlistsList: []
@@ -121,6 +122,11 @@ Panel {
   function setVolume(pct) {
     root.volumePct = pct
     runCmd(["volume_pct", String(pct)])
+  }
+
+  function toggleMute() {
+    if (root.volumePct > 0) { root._preMuteVol = root.volumePct; setVolume(0) }
+    else setVolume(root._preMuteVol || 80)
   }
 
   function seekTo(sec) { runCmd(["seek", String(sec)]) }
@@ -353,7 +359,19 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      blocked: trackList.urlInput.activeFocus
       onCloseRequested: root.close()
+      onActivateRequested: root.togglePlayback()
+      onMoveRequested: function(dx, dy) {
+        if (dy < 0) root.adjustVolume(5)
+        else if (dy > 0) root.adjustVolume(-5)
+        else if (dx > 0) root.seekTo(Math.min(root.totalSecs, root.curSecs + 5))
+        else if (dx < 0) root.seekTo(Math.max(0, root.curSecs - 5))
+      }
+      onTextKey: function(t) {
+        if (t === "/") { trackList.urlInput.forceActiveFocus(); trackList.urlInput.selectAll() }
+        else if (t === "m") root.toggleMute()
+      }
 
       Column {
         id: mainColumn
@@ -369,7 +387,7 @@ Panel {
 
         PanelSeparator { foreground: root.foreground }
 
-        TrackList { p: root }
+        TrackList { id: trackList; p: root }
       }
     }
   }

@@ -7,6 +7,7 @@ import qs.Ui
 Column {
   id: root
   property var p  // Panel root
+  property alias urlInput: urlInput
 
   width: parent ? parent.width : 0
   spacing: Style.space(6)
