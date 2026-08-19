@@ -298,24 +298,32 @@ Panel {
     onTriggered: root.refresh()
   }
 
-  // Physics animation timer for retro equalizer visualizer
+  // Real live audio FFT spectrum visualizer timer
   Timer {
     id: visTimer
-    interval: 50
-    running: root.opened && root.isPlaying
+    interval: 35
+    running: root.opened
     repeat: true
     onTriggered: {
+      var realBands = []
+      if (root.isPlaying) {
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "file:///dev/shm/omaramp_spectrum.json", false)
+        try {
+          xhr.send()
+          if (xhr.status === 200 || xhr.status === 0) {
+            realBands = JSON.parse(xhr.responseText || "[]")
+          }
+        } catch (e) {}
+      }
+
       var newBands = []
       var newPeaks = []
       for (var i = 0; i < 24; i++) {
-        var prev = root.visBands[i] || 0
-        var prevPeak = root.visPeaks[i] || 0
-        // Generate responsive procedural spectrum audio animation
-        var target = 0.15 + 0.85 * Math.sin((Date.now() / 120.0) + i * 0.45) * Math.cos((Date.now() / 240.0) - i * 0.2)
-        target = Math.max(0.05, Math.min(1.0, target * (0.6 + 0.4 * Math.random())))
-        var current = prev * 0.4 + target * 0.6
-        var peak = Math.max(current, prevPeak - 0.04)
-        newBands.push(current)
+        var target = (realBands.length > i) ? Number(realBands[i]) : 0.0
+        var prevPeak = root.visPeaks[i] || 0.0
+        var peak = Math.max(target, prevPeak - 0.035)
+        newBands.push(target)
         newPeaks.push(peak)
       }
       root.visBands = newBands

@@ -41,6 +41,15 @@ def is_mpv_running():
     res = send_mpv_cmd(["get_property", "idle-active"])
     return res is not None and res.get("error") == "success"
 
+def start_spectrum_daemon():
+    try:
+        res = subprocess.run(["pgrep", "-f", "omaramp/spectrum.py"], capture_output=True, text=True)
+        if not res.stdout.strip():
+            spec_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spectrum.py")
+            subprocess.Popen(["python3", spec_script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    except Exception:
+        pass
+
 def start_mpv_daemon():
     if not is_mpv_running():
         if os.path.exists(SOCK_PATH):
@@ -62,6 +71,7 @@ def start_mpv_daemon():
             time.sleep(0.1)
             if os.path.exists(SOCK_PATH):
                 break
+    start_spectrum_daemon()
 
 def extract_vid(url):
     m = re.search(r"(?:v=|\/|be\/)([0-9A-Za-z_-]{11})", url)
