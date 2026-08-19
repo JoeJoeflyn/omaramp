@@ -104,7 +104,7 @@ BarWidget {
               width: Style.space(2)
               height: Style.space(4)
               radius: 1
-              color: (root.bar && root.bar.activeColor) ? root.bar.activeColor : Color.accent
+              color: root.bar ? (root.bar.barForeground || root.bar.foreground || "#ffffff") : "#ffffff"
               anchors.bottom: parent.bottom
 
               SequentialAnimation on height {
@@ -122,7 +122,7 @@ BarWidget {
               width: Style.space(2)
               height: Style.space(10)
               radius: 1
-              color: (root.bar && root.bar.activeColor) ? root.bar.activeColor : Color.accent
+              color: root.bar ? (root.bar.barForeground || root.bar.foreground || "#ffffff") : "#ffffff"
               anchors.bottom: parent.bottom
 
               SequentialAnimation on height {
@@ -140,7 +140,7 @@ BarWidget {
               width: Style.space(2)
               height: Style.space(7)
               radius: 1
-              color: (root.bar && root.bar.activeColor) ? root.bar.activeColor : Color.accent
+              color: root.bar ? (root.bar.barForeground || root.bar.foreground || "#ffffff") : "#ffffff"
               anchors.bottom: parent.bottom
 
               SequentialAnimation on height {
@@ -163,7 +163,7 @@ BarWidget {
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.bar.iconFont
           color: (panelLoader.item && panelLoader.item.opened)
-            ? (root.bar && root.bar.activeColor ? root.bar.activeColor : Color.accent)
+            ? (root.bar ? (root.bar.barForeground || root.bar.foreground || "#ffffff") : "#ffffff")
             : ((panelLoader.item && panelLoader.item.playbackState === "paused")
                 ? (panelLoader.item ? panelLoader.item.dim : Color.foreground)
                 : (root.bar ? root.bar.foreground : Color.foreground))
