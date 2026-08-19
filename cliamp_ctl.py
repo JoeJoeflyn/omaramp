@@ -62,6 +62,8 @@ def start_mpv_daemon():
             "--no-video",
             "--idle=yes",
             "--ao=pipewire,pulse,alsa",
+            "--ytdl-format=bestaudio/best",
+            "--ytdl-raw-options=extractor-args=youtube:player_client=mweb",
             f"--input-ipc-server={SOCK_PATH}",
             "--keep-open=yes",
             "--volume=80"
@@ -72,53 +74,6 @@ def start_mpv_daemon():
             if os.path.exists(SOCK_PATH):
                 break
     start_spectrum_daemon()
-
-def extract_vid(url):
-    m = re.search(r"(?:v=|\/|be\/)([0-9A-Za-z_-]{11})", url)
-    return m.group(1) if m else None
-
-def get_or_download_audio(url):
-    vid = extract_vid(url)
-    if not vid:
-        return url, "Track", ""
-
-    meta_json = os.path.join(AUDIO_CACHE_DIR, f"{vid}.json")
-    title = "Track"
-    artist = ""
-
-    if os.path.exists(meta_json):
-        try:
-            with open(meta_json, "r", encoding="utf-8") as f:
-                meta = json.load(f)
-                title = meta.get("title", "Track")
-                artist = meta.get("artist", "")
-        except Exception:
-            pass
-
-    # 1. Instant cache check for any audio/video container
-    import glob
-    candidates = [p for p in glob.glob(os.path.join(AUDIO_CACHE_DIR, f"{vid}.*")) 
-                  if not p.endswith(".part") and not p.endswith(".json") and not p.endswith(".ytdl") and os.path.getsize(p) > 10000]
-    if candidates:
-        return candidates[0], title, artist
-
-    # 2. Download direct audio stream
-    out_template = os.path.join(AUDIO_CACHE_DIR, f"{vid}.%(ext)s")
-    cmd = [
-        "yt-dlp",
-        "--extractor-args", "youtube:player_client=mweb",
-        "-f", "ba/b",
-        "-o", out_template,
-        f"https://www.youtube.com/watch?v={vid}"
-    ]
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=40.0)
-
-    candidates = [p for p in glob.glob(os.path.join(AUDIO_CACHE_DIR, f"{vid}.*")) 
-                  if not p.endswith(".part") and not p.endswith(".json") and not p.endswith(".ytdl") and os.path.getsize(p) > 10000]
-    if candidates:
-        return candidates[0], title, artist
-
-    return url, "Track", ""
 
 def record_history(title, artist, url, dur):
     try:
@@ -306,38 +261,21 @@ def play_item(url, title=None, artist=None):
     if not url:
         return {"success": False}
     start_mpv_daemon()
-    local_path, t, a = get_or_download_audio(url)
-    final_title = title or t
-    final_artist = artist or a
-    vid = extract_vid(url)
-    if vid:
-        meta_json = os.path.join(AUDIO_CACHE_DIR, f"{vid}.json")
-        try:
-            with open(meta_json, "w", encoding="utf-8") as f:
-                json.dump({"title": final_title, "artist": final_artist, "vid": vid}, f)
-        except Exception:
-            pass
-    send_mpv_cmd(["loadfile", local_path, "replace"])
+    final_title = title or "Track"
+    final_artist = artist or ""
+    send_mpv_cmd(["loadfile", url, "replace"])
     send_mpv_cmd(["set_property", "pause", False])
     record_history(final_title, final_artist, url, 0)
-    return {"success": True, "file": local_path}
+    return {"success": True}
 
 def queue_item(url, title=None, artist=None):
     if not url:
         return {"success": False}
     start_mpv_daemon()
-    local_path, t, a = get_or_download_audio(url)
-    final_title = title or t
-    final_artist = artist or a
-    vid = extract_vid(url)
-    if vid:
-        meta_json = os.path.join(AUDIO_CACHE_DIR, f"{vid}.json")
-        try:
-            with open(meta_json, "w", encoding="utf-8") as f:
-                json.dump({"title": final_title, "artist": final_artist, "vid": vid}, f)
-        except Exception:
-            pass
-    send_mpv_cmd(["loadfile", local_path, "append"])
+    final_title = title or "Track"
+    final_artist = artist or ""
+    send_mpv_cmd(["loadfile", url, "append"])
+    record_history(final_title, final_artist, url, 0)
     return {"success": True}
 
 def stop_daemon():
