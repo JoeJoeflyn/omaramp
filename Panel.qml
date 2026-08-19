@@ -69,7 +69,7 @@ Panel {
     root.refresh()
     loadHistory()
     loadPlaylists()
-    checkResume()
+    Qt.callLater(checkResume)
   }
 
   function checkResume() {
@@ -355,10 +355,9 @@ Panel {
 
   Timer {
     id: visTimer
-    interval: 35; running: root.opened; repeat: true
+    interval: 50; running: root.opened && root.isPlaying; repeat: true
     onTriggered: {
       if (root.isPlaying) specFile.reload()
-      else root.updateSpectrumData("")
     }
   }
 
