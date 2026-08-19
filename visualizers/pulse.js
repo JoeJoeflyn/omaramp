@@ -1,4 +1,4 @@
-// Pulse — cliamp vis_pulse.go: per-angle band energy, solid fill, shockwave
+// Pulse — vis_pulse.go: per-angle band energy, solid fill, shockwave
 .pragma library
 .import "helpers.js" as H
 

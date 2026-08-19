@@ -1,11 +1,11 @@
-// Stereo — cliamp vis_stereo.go: RMS level + peak meters
+// Stereo — vis_stereo.go: RMS level + peak meters
 .pragma library
 .import "helpers.js" as H
 
 function render(ctx, d) {
   var bands = d.bands, wave = d.wave, h = d.height, w = d.width, count = d.count
   var halfH = h / 2.0
-  // RMS from waveform (cliamp uses stereo RMS, we have mono)
+  // RMS from waveform (uses stereo RMS, we have mono)
   var swSum = 0, swPeak = 0
   for (var i = 0; i < wave.length; i++) {
     var v = Math.abs(wave[i])

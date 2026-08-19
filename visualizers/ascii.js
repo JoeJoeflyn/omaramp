@@ -1,4 +1,4 @@
-// Ascii — cliamp vis_ascii.go: shade-block columns (█ ▓ ▒ ░)
+// Ascii — vis_ascii.go: shade-block columns (█ ▓ ▒ ░)
 .pragma library
 .import "helpers.js" as H
 

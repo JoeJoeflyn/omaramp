@@ -1,4 +1,4 @@
-// BarsOutline — cliamp vis_bars_outline.go: top-edge outline only
+// BarsOutline — vis_bars_outline.go: top-edge outline only
 .pragma library
 .import "helpers.js" as H
 

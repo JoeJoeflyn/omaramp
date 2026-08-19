@@ -1,7 +1,7 @@
-// Shared helpers for all visualizers — ported from cliamp's visualizer.go
+// Shared helpers for all visualizers — ported from  visualizer.go
 .pragma library
 
-// cliamp scatterHash — deterministic per-dot hash for stable particle patterns
+// scatterHash — deterministic per-dot hash for stable particle patterns
 function scatterHash(band, row, col, frame) {
   var f = Math.floor((frame + row * 3 + col) / 3)
   var h = (band * 7919 + row * 6271 + col * 3037 + f * 104729) & 0xFFFFFFFF
@@ -11,7 +11,7 @@ function scatterHash(band, row, col, frame) {
   return (h % 10000) / 10000.0
 }
 
-// cliamp sampleBandLinear — linear interpolation between band values
+// sampleBandLinear — linear interpolation between band values
 function sampleBandLinear(bands, pos) {
   if (bands.length === 0) return 0
   if (bands.length === 1) return bands[0]
@@ -23,7 +23,7 @@ function sampleBandLinear(bands, pos) {
   return bands[idx] * (1 - frac) + bands[idx + 1] * frac
 }
 
-// cliamp resampleBandsLinear — resample bands to N columns
+// resampleBandsLinear — resample bands to N columns
 function resampleBandsLinear(bands, totalCols) {
   if (totalCols <= 0 || bands.length === 0) return []
   if (bands.length === totalCols) return bands.slice()
@@ -40,7 +40,7 @@ function resampleBandsLinear(bands, totalCols) {
   return out
 }
 
-// cliamp bandAvg — mean of bands[lo:hi]
+// bandAvg — mean of bands[lo:hi]
 function bandAvg(b, lo, hi) {
   if (lo < 0) lo = 0
   if (hi > b.length) hi = b.length
@@ -50,7 +50,7 @@ function bandAvg(b, lo, hi) {
   return s / (hi - lo)
 }
 
-// cliamp specWrap: 3 discrete color tiers (green/yellow/red at 0.3/0.6)
+// specWrap: 3 discrete color tiers (green/yellow/red at 0.3/0.6)
 // SpectrumLow = bright green, SpectrumMid = bright yellow, SpectrumHigh = bright red
 function specColor(norm) {
   if (norm >= 0.6) return "rgba(255, 85, 85, 0.9)"   // bright red
@@ -58,7 +58,7 @@ function specColor(norm) {
   return "rgba(85, 255, 85, 0.9)"                    // bright green
 }
 
-// LCG RNG — cliamp uses 64-bit constants that JS doubles can't handle precisely.
+// LCG RNG — uses 64-bit constants that JS doubles can't handle precisely.
 // 32-bit Numerical Recipes LCG produces equivalent deterministic pseudo-randomness.
 function lcgRng(state) {
   state.v = (state.v * 1664525 + 1013904223) & 0xFFFFFFFF

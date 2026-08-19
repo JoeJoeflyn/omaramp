@@ -1,4 +1,4 @@
-// ClassicLED — cliamp vis_classic_led.go: Winamp 2.9 LED matrix with falling peak caps
+// ClassicLED — vis_classic_led.go: Winamp 2.9 LED matrix with falling peak caps
 .pragma library
 .import "helpers.js" as H
 

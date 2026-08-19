@@ -5,7 +5,7 @@ import numpy as np
 
 OUT_FILE = "/dev/shm/omaramp_spectrum.json"
 RATE = 22050
-CHUNK = 2048  # cliamp defaultFFTSize=2048 — gives 1024 bins, 10.8Hz/bin
+CHUNK = 2048  # 2048-sample FFT — gives 1024 bins, 10.8Hz/bin
 NUM_BANDS = 24
 WAVE_SAMPLES = 128  # raw waveform points for scope/wave modes
 

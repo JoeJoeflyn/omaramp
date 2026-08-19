@@ -67,8 +67,6 @@ Panel {
   property real volumeDb: 0.0
   property bool shuffleMode: false
   property string repeatMode: "off"
-  property bool monoMode: false
-  property string speedText: "1.00x"
   property string eqText: "Custom"
 
   property var historyList: []
@@ -266,8 +264,6 @@ Panel {
           root.volumeDb = Number(data.volume_db || 0.0)
           root.shuffleMode = data.shuffle === true
           root.repeatMode = String(data.repeat || "off")
-          root.monoMode = data.mono === true
-          root.speedText = String(data.speed || "1.00x")
           root.eqText = String(data.eq || "Custom")
         } catch (e) {}
       }
@@ -451,7 +447,7 @@ Panel {
         bottomPadding: Style.space(8)
 
         // =====================================================================
-        // RETRO WINAMP / CLIAMP HUD HEADER
+        // RETRO WINAMP HUD HEADER
         // =====================================================================
         BorderSurface {
           width: parent.width
@@ -491,7 +487,7 @@ Panel {
                   }
 
                   Text {
-                    text: "CLIAMP"
+                    text: "OMARAMP"
                     color: Color.accent
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
@@ -511,45 +507,6 @@ Panel {
                 }
               }
 
-              // Right side: KBPS / Mode Badges
-              Row {
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: Style.space(4)
-
-                BorderSurface {
-                  implicitWidth: Style.space(46)
-                  implicitHeight: Style.space(16)
-                  radius: Style.space(2)
-                  color: Style.selectedFillFor(root.foreground, Color.accent)
-                  borderSpec: Border.flat(Color.accent, 1)
-
-                  Text {
-                    anchors.centerIn: parent
-                    text: root.monoMode ? "MONO" : "STEREO"
-                    color: Color.accent
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    font.bold: true
-                  }
-                }
-
-                BorderSurface {
-                  implicitWidth: Style.space(38)
-                  implicitHeight: Style.space(16)
-                  radius: Style.space(2)
-                  color: Style.selectedFillFor(root.foreground, Color.accent)
-                  borderSpec: Border.flat(Color.accent, 1)
-
-                  Text {
-                    anchors.centerIn: parent
-                    text: root.speedText
-                    color: Color.accent
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                  }
-                }
-              }
             }
 
             // Marquee Track Title Display
@@ -577,7 +534,7 @@ Panel {
                   width: parent.width - Style.space(20)
                   anchors.verticalCenter: parent.verticalCenter
                   text: {
-                    if (!root.isRunning) return "cliamp daemon idle — click play to start"
+                    if (!root.isRunning) return "daemon idle — click play to start"
                     var a = root.currentArtist
                     var t = root.currentTrack
                     return (a ? a + " - " : "") + t
@@ -592,7 +549,7 @@ Panel {
             }
 
             // =================================================================
-            // SPECTRUM VISUALIZER CANVAS (cliamp & Winamp Classic LED / Wave)
+            // SPECTRUM VISUALIZER CANVAS (Winamp Classic LED / Wave)
             // =================================================================
             Item {
               width: parent.width
@@ -610,7 +567,7 @@ Panel {
                   var gap = 3
                   var barW = Math.floor((width - (count - 1) * gap) / count)
                   var mode = root.visMode
-                  var S = 4  // scale: cliamp dot-units → canvas pixels
+                  var S = 4  // scale: dot-units → canvas pixels
 
                   // Build data object passed to every visualizer
                   var d = {

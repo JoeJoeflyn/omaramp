@@ -1,5 +1,5 @@
-// Bricks — cliamp vis_bricks.go: half-height blocks with natural gaps
-// cliamp uses ▄ (lower-half block) so each row only fills the bottom half,
+// Bricks — vis_bricks.go: half-height blocks with natural gaps
+// uses ▄ (lower-half block) so each row only fills the bottom half,
 // creating a natural gap. In Canvas we render the bottom half of each row unit.
 .pragma library
 .import "helpers.js" as H

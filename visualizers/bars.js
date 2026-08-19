@@ -1,4 +1,4 @@
-// Bars — cliamp vis_bars.go: smooth fractional blocks
+// Bars — vis_bars.go: smooth fractional blocks
 .pragma library
 .import "helpers.js" as H
 

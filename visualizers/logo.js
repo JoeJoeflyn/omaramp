@@ -1,4 +1,4 @@
-// Logo — cliamp vis_logo.go: pixel text "OMARAMP", energy-gated dots
+// Logo — vis_logo.go: pixel text "OMARAMP", energy-gated dots
 .pragma library
 .import "helpers.js" as H
 

@@ -1,10 +1,10 @@
-// BarsDot — cliamp vis_bars_dot.go: Braille dot-pattern bars (fill all dots, no skip)
+// BarsDot — vis_bars_dot.go: Braille dot-pattern bars (fill all dots, no skip)
 .pragma library
 .import "helpers.js" as H
 
 function render(ctx, d) {
   var bands = d.bands, h = d.height, w = d.width, count = d.count, barW = d.barW, gap = d.gap, S = d.S
-  // cliamp: each terminal cell = 4×2 Braille grid. We map to 2×2 pixel dots.
+  // : each terminal cell = 4×2 Braille grid. We map to 2×2 pixel dots.
   // Fill ALL dots where dotY < level (no stochastic skip — the dot grid IS the texture)
   for (var i = 0; i < count; i++) {
     var level = d.playing ? (bands[i] || 0) : 0

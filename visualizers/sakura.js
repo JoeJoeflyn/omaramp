@@ -1,4 +1,4 @@
-// Sakura — cliamp vis_sakura.go: falling cherry blossom petals
+// Sakura — vis_sakura.go: falling cherry blossom petals
 .pragma library
 
 var shapes = [

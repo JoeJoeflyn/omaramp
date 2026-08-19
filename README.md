@@ -1,6 +1,8 @@
 # Omaramp 📻
 
-Native status bar retro music player controller and live spectrum visualizer for Omarchy, powered by [`cliamp`](https://github.com/brianstrauch/cliamp).
+Native status bar retro music player controller and live spectrum visualizer for Omarchy.
+
+Inspired by [cliamp](https://github.com/brianstrauch/cliamp).
 
 [![Omarchy Plugin](https://img.shields.io/badge/omarchy-plugin-blue.svg)](https://omarchyplugins.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -14,7 +16,7 @@ Native status bar retro music player controller and live spectrum visualizer for
 - **Full Transport Deck**: Play/Pause, Next, Prev, Stop, Shuffle, Repeat cycle, and volume slider.
 - **Quick Queue / Stream Input**: Paste YouTube, SoundCloud, stream URLs, or local audio file paths to play or queue instantly.
 - **Playlist & History Browser**: Browse and play directly from recently played tracks and saved local playlists.
-- **Zero-Overhead Idle**: Uses 0% CPU and negligible memory when not in use. Starts and manages the `cliamp` daemon on demand.
+- **Zero-Overhead Idle**: Uses 0% CPU and negligible memory when not in use.
 - **Bar Widget Controls**:
   - **Left Click**: Open/toggle popup player panel.
   - **Middle Click**: Instant Play/Pause toggle.
@@ -23,10 +25,6 @@ Native status bar retro music player controller and live spectrum visualizer for
 
 ## Installation
 
-Ensure `cliamp` is installed on your system:
-
-```bash
-which cliamp
 ```
 
 ### Enable in Omarchy

@@ -1,4 +1,4 @@
-// Bubbles — cliamp vis_bubbles.go: rising hollow rings, per-dot pop fade
+// Bubbles — vis_bubbles.go: rising hollow rings, per-dot pop fade
 .pragma library
 .import "helpers.js" as H
 

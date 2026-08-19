@@ -1,4 +1,4 @@
-// Scatter — cliamp vis_scatter.go: density = bands² × gravity bias
+// Scatter — vis_scatter.go: density = bands² × gravity bias
 .pragma library
 .import "helpers.js" as H
 

@@ -1,4 +1,4 @@
-// Flame — cliamp vis_flame.go: doom-fire heat propagation
+// Flame — vis_flame.go: doom-fire heat propagation
 .pragma library
 .import "helpers.js" as H
 

@@ -1,4 +1,4 @@
-// Columns — cliamp vis_columns.go: many thin interpolated columns
+// Columns — vis_columns.go: many thin interpolated columns
 .pragma library
 .import "helpers.js" as H
 

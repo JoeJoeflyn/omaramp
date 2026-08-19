@@ -1,4 +1,4 @@
-// Heartbeat — cliamp vis_heartbeat.go: ECG trace with shaped waveform + dashed baseline
+// Heartbeat — vis_heartbeat.go: ECG trace with shaped waveform + dashed baseline
 .pragma library
 
 function render(ctx, d) {
@@ -24,7 +24,7 @@ function render(ctx, d) {
     }
     ctx.stroke()
   }
-  // Dashed baseline (cliamp: on 6, off 4)
+  // Dashed baseline (: on 6, off 4)
   ctx.strokeStyle = "rgba(0, 255, 100, 0.3)"
   ctx.lineWidth = 1
   ctx.beginPath()

@@ -1,4 +1,4 @@
-// Scope — cliamp vis_scope.go: Lissajous XY oscilloscope with interpolation
+// Scope — vis_scope.go: Lissajous XY oscilloscope with interpolation
 .pragma library
 
 function render(ctx, d) {

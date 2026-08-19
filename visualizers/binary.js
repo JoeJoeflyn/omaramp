@@ -1,4 +1,4 @@
-// Binary — cliamp vis_binary.go: streaming 0s and 1s, scroll speed ∝ energy
+// Binary — vis_binary.go: streaming 0s and 1s, scroll speed ∝ energy
 .pragma library
 .import "helpers.js" as H
 

@@ -1,4 +1,4 @@
-// Firefly — cliamp vis_firefly.go: meadow at dusk with drifting fireflies
+// Firefly — vis_firefly.go: meadow at dusk with drifting fireflies
 .pragma library
 .import "helpers.js" as H
 

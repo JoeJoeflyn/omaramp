@@ -1,4 +1,4 @@
-// Terrain — cliamp vis_terrain.go: scrolling buffer, new data enters right
+// Terrain — vis_terrain.go: scrolling buffer, new data enters right
 .pragma library
 .import "helpers.js" as H
 

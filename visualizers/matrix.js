@@ -1,4 +1,4 @@
-// Matrix — cliamp vis_matrix.go: per-column streams, scatterHash gate
+// Matrix — vis_matrix.go: per-column streams, scatterHash gate
 .pragma library
 .import "helpers.js" as H
 

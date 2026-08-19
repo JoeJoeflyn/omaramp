@@ -1,5 +1,5 @@
-// Geyser — cliamp vis_geyser.go: particle fountain with gravity
-// ponytail: cliamp's physics are tuned for a ~160-dot grid; our canvas is ~42px.
+// Geyser — vis_geyser.go: particle fountain with gravity
+// ponytail:  physics are tuned for a ~160-dot grid; our canvas is ~42px.
 // Scale gravity and velocities by h/160 so the arc proportions match.
 .pragma library
 .import "helpers.js" as H
@@ -10,7 +10,7 @@ function render(ctx, d) {
   if (s.geyserRng === undefined) { s.geyserRng = 0xFEED5EED; s.geyserParticles = []; s.geyserPrevBass = 0 }
   var rngVal = s.geyserRng
   var particles = s.geyserParticles
-  // Scale factor: cliamp's dotRows ≈ 160, our canvas is h pixels
+  // Scale factor:  dotRows ≈ 160, our canvas is h pixels
   var physScale = h / 160.0
   function rng01() {
     rngVal = (rngVal * 1664525 + 1013904223) & 0xFFFFFFFF

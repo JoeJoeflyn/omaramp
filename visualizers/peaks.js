@@ -1,4 +1,4 @@
-// Peaks — cliamp vis_classic_peak.go: physics-based falling caps
+// Peaks — vis_classic_peak.go: physics-based falling caps
 .pragma library
 
 function render(ctx, d) {

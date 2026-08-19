@@ -1,4 +1,4 @@
-// Wave — cliamp vis_wave.go: raw audio oscilloscope
+// Wave — vis_wave.go: raw audio oscilloscope
 .pragma library
 
 function render(ctx, d) {

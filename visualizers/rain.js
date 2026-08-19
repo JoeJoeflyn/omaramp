@@ -1,4 +1,4 @@
-// Rain — cliamp vis_rain.go: bar columns with falling streaks
+// Rain — vis_rain.go: bar columns with falling streaks
 .pragma library
 .import "helpers.js" as H
 

@@ -93,7 +93,10 @@ def start_mpv_daemon():
 
 def record_history(title, artist, url, dur):
     try:
-        entry = f'\n[[entry]]\nplayed_at = "{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}"\npath = "{url}"\ntitle = "{title.replace(chr(34), "")}"\nartist = "{artist.replace(chr(34), "")}"\nduration_secs = {int(dur or 0)}\n'
+        # Escape backslashes, double quotes, and newlines for safe TOML string values
+        def esc(s):
+            return (s or "").replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+        entry = f'\n[[entry]]\nplayed_at = "{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}"\npath = "{esc(url)}"\ntitle = "{esc(title)}"\nartist = "{esc(artist)}"\nduration_secs = {int(dur or 0)}\n'
         with open(HISTORY_PATH, "a", encoding="utf-8") as f:
             f.write(entry)
     except Exception:
@@ -155,8 +158,6 @@ def get_status():
             "volume_pct": 80,
             "shuffle": False,
             "repeat": "off",
-            "mono": False,
-            "speed": "1.00x",
             "eq": "Custom"
         }
 
@@ -224,8 +225,6 @@ def get_status():
             "volume_pct": vol,
             "shuffle": False,
             "repeat": "all",
-            "mono": False,
-            "speed": "1.00x",
             "eq": "Custom"
         }
     except Exception as e:
@@ -244,8 +243,6 @@ def get_status():
             "volume_pct": 80,
             "shuffle": False,
             "repeat": "off",
-            "mono": False,
-            "speed": "1.00x",
             "eq": "Custom"
         }
 
@@ -314,11 +311,10 @@ def stream_youtube(url):
         os.mkfifo(STREAM_FIFO)
     except Exception:
         pass
-    # Start yt-dlp streaming to stdout, shell redirects to FIFO (blocks until mpv reads)
+    # Start yt-dlp streaming to the FIFO — no shell=True, list args prevent injection
     subprocess.Popen(
-        f"yt-dlp --no-warnings -f 18/best -o - {repr(url)} > {STREAM_FIFO}",
-        shell=True,
-        stdout=subprocess.DEVNULL,
+        ["yt-dlp", "--no-warnings", "-f", "18/best", "-o", "-", url],
+        stdout=open(STREAM_FIFO, "wb"),
         stderr=subprocess.DEVNULL,
         start_new_session=True
     )

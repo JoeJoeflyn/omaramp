@@ -1,4 +1,4 @@
-// Mosaic — cliamp vis_mosaic.go: static heatmap of flickering tiles
+// Mosaic — vis_mosaic.go: static heatmap of flickering tiles
 .pragma library
 .import "helpers.js" as H
 

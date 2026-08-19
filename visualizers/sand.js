@@ -1,6 +1,6 @@
-// Sand — cliamp vis_sand.go: falling-sand cellular automaton
-// ponytail: cliamp's grid is ~160 dot-rows; our canvas is 42px. Scale physics
-// by rows/160 so explosions peak at ~50% height like cliamp, not 193%.
+// Sand — vis_sand.go: falling-sand cellular automaton
+// ponytail:  grid is ~160 dot-rows; our canvas is 42px. Scale physics
+// by rows/160 so explosions peak at ~50% height like  not 193%.
 .pragma library
 .import "helpers.js" as H
 
@@ -8,7 +8,7 @@ function render(ctx, d) {
   var bands = d.bands, h = d.height, w = d.width, count = d.count, S = d.S, frame = d.frame
   // 2px rows → 2×2 grains (visible), fall in 21 frames
   var rows = Math.floor(h / 2), cols = Math.floor(w / 2)
-  // Scale physics to match cliamp's 160-row grid proportions
+  // Scale physics to match  160-row grid proportions
   var physScale = rows / 160.0
   var s = d.state
   if (s.sandRng === undefined) { s.sandRng = 0x5A4D5A4D; s.sandPrevBass = 0; s.sandParticles = []; s.sandExplosionTTL = 0 }
@@ -142,7 +142,7 @@ function startExplosion(grid, rows, cols, particles, rand01, physScale) {
       var g = grid[y * cols + x]
       if (g === 0) continue
       grid[y * cols + x] = 0
-      // Scale velocities by physScale so apex matches cliamp's ~50% of height
+      // Scale velocities by physScale so apex matches  ~50% of height
       particles.push({
         x: x, y: y,
         vx: (rand01() - 0.5) * 8.0 * physScale,
