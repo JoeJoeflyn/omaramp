@@ -86,15 +86,85 @@ BarWidget {
       Item {
         anchors.fill: parent
 
+        // 1. Live Animated Equalizer Bars when PLAYING
+        Item {
+          anchors.centerIn: parent
+          width: Style.space(14)
+          height: Style.space(12)
+          visible: panelLoader.item && panelLoader.item.isPlaying
+
+          Row {
+            anchors.bottom: parent.bottom
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: Style.space(2)
+
+            Rectangle {
+              id: bar1
+              width: Style.space(2)
+              height: Style.space(4)
+              radius: 1
+              color: (panelLoader.item && panelLoader.item.opened && root.bar && root.bar.activeColor) ? root.bar.activeColor : Color.accent
+              anchors.bottom: parent.bottom
+
+              SequentialAnimation on height {
+                running: panelLoader.item && panelLoader.item.isPlaying
+                loops: Animation.Infinite
+                NumberAnimation { to: Style.space(11); duration: 320; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: Style.space(4); duration: 280; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: Style.space(9); duration: 240; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: Style.space(3); duration: 260; easing.type: Easing.InOutQuad }
+              }
+            }
+
+            Rectangle {
+              id: bar2
+              width: Style.space(2)
+              height: Style.space(10)
+              radius: 1
+              color: (panelLoader.item && panelLoader.item.opened && root.bar && root.bar.activeColor) ? root.bar.activeColor : Color.accent
+              anchors.bottom: parent.bottom
+
+              SequentialAnimation on height {
+                running: panelLoader.item && panelLoader.item.isPlaying
+                loops: Animation.Infinite
+                NumberAnimation { to: Style.space(3); duration: 250; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: Style.space(12); duration: 340; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: Style.space(6); duration: 220; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: Style.space(11); duration: 290; easing.type: Easing.InOutQuad }
+              }
+            }
+
+            Rectangle {
+              id: bar3
+              width: Style.space(2)
+              height: Style.space(7)
+              radius: 1
+              color: (panelLoader.item && panelLoader.item.opened && root.bar && root.bar.activeColor) ? root.bar.activeColor : Color.accent
+              anchors.bottom: parent.bottom
+
+              SequentialAnimation on height {
+                running: panelLoader.item && panelLoader.item.isPlaying
+                loops: Animation.Infinite
+                NumberAnimation { to: Style.space(12); duration: 290; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: Style.space(5); duration: 270; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: Style.space(10); duration: 310; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: Style.space(4); duration: 230; easing.type: Easing.InOutQuad }
+              }
+            }
+          }
+        }
+
+        // 2. Static Icon when STOPPED or PAUSED
         Text {
           anchors.centerIn: parent
-          text: "\uf001"
+          visible: !panelLoader.item || !panelLoader.item.isPlaying
+          text: (panelLoader.item && panelLoader.item.playbackState === "paused") ? "\uf04c" : "\uf001"
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.bar.iconFont
           color: (panelLoader.item && panelLoader.item.opened)
             ? (root.bar && root.bar.activeColor ? root.bar.activeColor : Color.accent)
-            : ((panelLoader.item && panelLoader.item.isPlaying)
-                ? Color.accent
+            : ((panelLoader.item && panelLoader.item.playbackState === "paused")
+                ? (panelLoader.item ? panelLoader.item.dim : Color.foreground)
                 : (root.bar ? root.bar.foreground : Color.foreground))
         }
       }
