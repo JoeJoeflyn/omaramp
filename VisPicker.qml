@@ -24,6 +24,8 @@ BorderSurface {
     // Wave & Scope
     { id: "siriwave", name: "Siri Wave", category: "scope", icon: "\uf179" },
     { id: "scrubber_wave", name: "Scrubber Wave", category: "scope", icon: "\uf080" },
+    { id: "line_wave", name: "Line Wave", category: "scope", icon: "\uf201" },
+    { id: "curve_wave", name: "Curve Wave", category: "scope", icon: "\uf1fe" },
     { id: "wave", name: "Waveform", category: "scope", icon: "\uf21e" },
     { id: "scope", name: "XY Scope", category: "scope", icon: "\uf1fe" },
     { id: "sine", name: "Sine Wave", category: "scope", icon: "\uf1d8" },
@@ -85,7 +87,7 @@ BorderSurface {
       Text {
         width: parent.width - Style.space(48)
         anchors.verticalCenter: parent.verticalCenter
-        text: "Visualizer Styles (32)"
+        text: "Visualizer Styles (34)"
         color: p ? p.foreground : "#fff"
         font.family: p ? p.fontFamily : "sans-serif"
         font.pixelSize: Style.font.caption; font.bold: true

@@ -35,6 +35,8 @@ import "visualizers/ascii.js" as VisAscii
 import "visualizers/sine.js" as VisSine
 import "visualizers/siriwave.js" as VisSiriWave
 import "visualizers/scrubber_wave.js" as VisScrubberWave
+import "visualizers/line_wave.js" as VisLineWave
+import "visualizers/curve_wave.js" as VisCurveWave
 
 // HUD header + visualizer canvas + seek bar
 Item {
@@ -117,7 +119,8 @@ Item {
     "terrain": VisTerrain.render, "logo": VisLogo.render, "firefly": VisFirefly.render,
     "geyser": VisGeyser.render, "mosaic": VisMosaic.render, "sand": VisSand.render,
     "stereo": VisStereo.render, "ascii": VisAscii.render, "sine": VisSine.render,
-    "siriwave": VisSiriWave.render, "scrubber_wave": VisScrubberWave.render
+    "siriwave": VisSiriWave.render, "scrubber_wave": VisScrubberWave.render,
+    "line_wave": VisLineWave.render, "curve_wave": VisCurveWave.render
   })
 
   readonly property var _modeLabels: ({
@@ -131,7 +134,8 @@ Item {
     "terrain": "Terrain", "logo": "Logo", "firefly": "Firefly",
     "geyser": "Geyser", "mosaic": "Mosaic", "sand": "Sand",
     "stereo": "Stereo", "ascii": "Ascii", "sine": "Sine Wave",
-    "siriwave": "Siri Wave", "scrubber_wave": "Scrubber Wave"
+    "siriwave": "Siri Wave", "scrubber_wave": "Scrubber Wave",
+    "line_wave": "Line Wave", "curve_wave": "Curve Wave"
   })
 
   function requestPaint() { if (visCanvas) visCanvas.requestPaint() }
