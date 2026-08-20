@@ -33,6 +33,7 @@ import "visualizers/sand.js" as VisSand
 import "visualizers/stereo.js" as VisStereo
 import "visualizers/ascii.js" as VisAscii
 import "visualizers/sine.js" as VisSine
+import "visualizers/apple_wave.js" as VisAppleWave
 
 // HUD header + visualizer canvas + seek bar
 Item {
@@ -114,7 +115,8 @@ Item {
     "firework": VisFirework.render, "bubbles": VisBubbles.render, "rain": VisRain.render,
     "terrain": VisTerrain.render, "logo": VisLogo.render, "firefly": VisFirefly.render,
     "geyser": VisGeyser.render, "mosaic": VisMosaic.render, "sand": VisSand.render,
-    "stereo": VisStereo.render, "ascii": VisAscii.render, "sine": VisSine.render
+    "stereo": VisStereo.render, "ascii": VisAscii.render, "sine": VisSine.render,
+    "apple_wave": VisAppleWave.render
   })
 
   readonly property var _modeLabels: ({
@@ -127,7 +129,8 @@ Item {
     "firework": "Firework", "bubbles": "Bubbles", "rain": "Rain",
     "terrain": "Terrain", "logo": "Logo", "firefly": "Firefly",
     "geyser": "Geyser", "mosaic": "Mosaic", "sand": "Sand",
-    "stereo": "Stereo", "ascii": "Ascii", "sine": "Sine Wave"
+    "stereo": "Stereo", "ascii": "Ascii", "sine": "Sine Wave",
+    "apple_wave": "Apple Wave"
   })
 
   function requestPaint() { if (visCanvas) visCanvas.requestPaint() }

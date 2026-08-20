@@ -19,11 +19,11 @@ function render(ctx, d) {
     var pos = fx / Math.max(1, fCols - 1) * (count - 1)
     var bi = Math.floor(pos)
     var frac = pos - bi
-    var src = (bands[bi] || 0) * (1 - frac) + (bands[Math.min(bi+1, count-1)] || 0) * frac
+    var src = d.playing ? ((bands[bi] || 0) * (1 - frac) + (bands[Math.min(bi+1, count-1)] || 0) * frac) : 0
     rngVal = (rngVal * 1664525 + 1013904223) & 0xFFFFFFFF
-    var sparkle = ((rngVal >> 16) % 100) / 100.0 * 0.18
-    var base = 0.30 + 0.70 * src + sparkle
-    if (base > 1.05) base = 1.05
+    var sparkle = d.playing && src > 0.05 ? (((rngVal >> 16) % 100) / 100.0 * 0.20) : 0
+    var base = d.playing ? (src * 1.35 + sparkle) : 0
+    if (base > 1.2) base = 1.2
     heat[fx] = base
   }
 

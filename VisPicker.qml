@@ -22,6 +22,7 @@ BorderSurface {
     { id: "ascii", name: "ASCII", category: "classic", icon: "\uf121" },
 
     // Wave & Scope
+    { id: "apple_wave", name: "Apple Wave", category: "scope", icon: "\uf179" },
     { id: "wave", name: "Waveform", category: "scope", icon: "\uf21e" },
     { id: "scope", name: "XY Scope", category: "scope", icon: "\uf1fe" },
     { id: "sine", name: "Sine Wave", category: "scope", icon: "\uf1d8" },
@@ -83,7 +84,7 @@ BorderSurface {
       Text {
         width: parent.width - Style.space(48)
         anchors.verticalCenter: parent.verticalCenter
-        text: "Visualizer Styles (30)"
+        text: "Visualizer Styles (31)"
         color: p ? p.foreground : "#fff"
         font.family: p ? p.fontFamily : "sans-serif"
         font.pixelSize: Style.font.caption; font.bold: true
