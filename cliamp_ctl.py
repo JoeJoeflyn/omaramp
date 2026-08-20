@@ -9,6 +9,10 @@ import time
 import re
 import urllib.request
 import urllib.parse
+try:
+    import tomllib
+except ImportError:
+    tomllib = None
 
 SOCK_PATH = f"/tmp/omaramp_mpv_{os.getuid()}.sock"
 STREAM_FIFO = f"/tmp/omaramp_stream_{os.getuid()}"
@@ -104,7 +108,6 @@ def start_mpv_daemon():
 
 def record_history(title, artist, url, dur):
     try:
-        # Escape backslashes, double quotes, and newlines for safe TOML string values
         def esc(s):
             return (s or "").replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
         entry = f'\n[[entry]]\nplayed_at = "{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}"\npath = "{esc(url)}"\ntitle = "{esc(title)}"\nartist = "{esc(artist)}"\nduration_secs = {int(dur or 0)}\n'
@@ -117,38 +120,22 @@ def parse_history(limit=30):
     if not os.path.exists(HISTORY_PATH):
         return []
     try:
-        with open(HISTORY_PATH, "r", encoding="utf-8") as f:
-            content = f.read()
-        entries = []
-        raw_blocks = content.split("[[entry]]")
-        for b in reversed(raw_blocks):
-            b = b.strip()
-            if not b:
-                continue
-            item = {}
-            for line in b.splitlines():
-                if "=" in line:
-                    k, v = line.split("=", 1)
-                    k = k.strip()
-                    v = v.strip().strip('"')
-                    if k == "duration_secs":
-                        try:
-                            item[k] = int(v)
-                        except ValueError:
-                            item[k] = 0
-                    else:
-                        item[k] = v
-            if item.get("title") or item.get("path"):
-                # Add thumbnail path for YouTube URLs
-                m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", item.get("path", ""))
-                if m:
-                    item["thumb"] = os.path.join(AUDIO_CACHE_DIR, f"{m.group(1)}.jpg")
-                entries.append(item)
-            if len(entries) >= limit:
-                break
-        return entries
+        if tomllib:
+            with open(HISTORY_PATH, "rb") as f:
+                data = tomllib.load(f)
+            entries = []
+            for item in reversed(data.get("entry", [])):
+                if item.get("title") or item.get("path"):
+                    m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", str(item.get("path", "")))
+                    if m:
+                        item["thumb"] = os.path.join(AUDIO_CACHE_DIR, f"{m.group(1)}.jpg")
+                    entries.append(item)
+                if len(entries) >= limit:
+                    break
+            return entries
     except Exception:
-        return []
+        pass
+    return []
 
 PLAYLISTS_FILE = os.path.join(CACHE_DIR, "playlists.json")
 
@@ -366,45 +353,6 @@ def get_dominant_color(img_path):
                     return c
         except Exception:
             pass
-
-    try:
-        cmd = ["magick", img_path, "-resize", "32x32!", "-colors", "8", "-format", "%c", "histogram:info:"]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=1.0)
-        lines = res.stdout.splitlines()
-        best_color = ""
-        best_score = -1
-        for line in lines:
-            m = re.search(r"#([0-9A-Fa-f]{6})", line)
-            count_m = re.search(r"^\s*(\d+):", line)
-            if m and count_m:
-                hex_c = "#" + m.group(1).upper()
-                count = int(count_m.group(1))
-                r = int(hex_c[1:3], 16)
-                g = int(hex_c[3:5], 16)
-                b = int(hex_c[5:7], 16)
-                max_c = max(r, g, b)
-                min_c = min(r, g, b)
-                sat = (max_c - min_c) / max(1, max_c)
-                brightness = max_c / 255.0
-                if brightness > 0.2 and brightness < 0.95:
-                    score = count * (1.0 + sat * 3.0)
-                    if score > best_score:
-                        best_score = score
-                        best_color = hex_c
-        if not best_color:
-            res = subprocess.run(["magick", img_path, "-scale", "1x1!", "-format", "#%[hex:u.p{0,0}]", "info:"], capture_output=True, text=True, timeout=1.0)
-            avg = res.stdout.strip()[:7]
-            if avg.startswith("#") and len(avg) == 7:
-                best_color = avg.upper()
-        if best_color:
-            try:
-                with open(color_file, "w") as f:
-                    f.write(best_color)
-            except Exception:
-                pass
-            return best_color
-    except Exception:
-        pass
     return ""
 
 def get_status():
@@ -714,19 +662,6 @@ def stream_youtube(url):
         start_new_session=True
     )
 
-def fade_volume(target, steps=8, delay=0.04):
-    cur_res = send_mpv_cmd(["get_property", "volume"])
-    if not cur_res or cur_res.get("data") is None:
-        return
-    cur = float(cur_res["data"])
-    if abs(cur - target) < 1:
-        return
-    step = (target - cur) / steps
-    for i in range(steps):
-        cur += step
-        send_mpv_cmd(["set_property", "volume", round(cur, 1)])
-        time.sleep(delay)
-
 def play_item(url, title=None, artist=None):
     if not url or not is_safe_url(url):
         return {"success": False, "error": "unsafe url"}
@@ -734,29 +669,14 @@ def play_item(url, title=None, artist=None):
     final_title = title or "Track"
     final_artist = artist or ""
     record_history(final_title, final_artist, url, 0)
-    # Save current volume for fade-in target
-    vol_res = send_mpv_cmd(["get_property", "volume"])
-    target_vol = float(vol_res.get("data") or 80) if vol_res else 80
-    # Fade out current track
-    state_res = send_mpv_cmd(["get_property", "pause"])
-    if state_res and state_res.get("data") is False:
-        fade_volume(0, steps=6, delay=0.05)
+    save_now_playing(final_title, final_artist, url)
     if is_youtube_url(url):
         save_youtube_meta(url, final_title, final_artist)
-        save_now_playing(final_title, final_artist, url)
         stream_youtube(url)
         send_mpv_cmd(["loadfile", STREAM_FIFO, "replace"])
-        send_mpv_cmd(["set_property", "pause", False])
-        send_mpv_cmd(["set_property", "volume", 0])
-        time.sleep(1.5)
-        fade_volume(target_vol, steps=8, delay=0.05)
-        return {"success": True}
-    save_now_playing(final_title, final_artist, url)
-    send_mpv_cmd(["loadfile", url, "replace"])
+    else:
+        send_mpv_cmd(["loadfile", url, "replace"])
     send_mpv_cmd(["set_property", "pause", False])
-    send_mpv_cmd(["set_property", "volume", 0])
-    time.sleep(0.5)
-    fade_volume(target_vol, steps=8, delay=0.05)
     return {"success": True}
 
 def queue_item(url, title=None, artist=None):
