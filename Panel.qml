@@ -479,7 +479,6 @@ Panel {
           visible: root.visPickerOpen
           active: root.visPickerOpen
           width: parent.width
-          implicitHeight: Style.space(200)
           source: "VisPicker.qml"
           onLoaded: { if (item) item.p = root }
         }
