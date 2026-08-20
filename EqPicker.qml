@@ -9,15 +9,15 @@ BorderSurface {
   property var p  // Panel root
 
   readonly property var presets: [
-    { id: "Flat", name: "Flat (Original)", icon: "⚖️", desc: "Pure unprocessed audio with 0 dB flat response" },
-    { id: "Bass Boost", name: "Bass Boost", icon: "🔊", desc: "Enhanced low-end sub-bass & kick drum punch" },
-    { id: "Rock", name: "Rock & Metal", icon: "🎸", desc: "Punchy low-mids and crisp treble drive" },
-    { id: "Electronic", name: "Electronic / EDM", icon: "🎧", desc: "Deep club bass with sparkling highs" },
-    { id: "Pop", name: "Pop / Modern", icon: "✨", desc: "Warm vocal focus with balanced soundstage" },
-    { id: "Vocal Clarity", name: "Vocal Clarity", icon: "🎤", desc: "Clear voice boost for speech, podcasts & lyrics" },
-    { id: "Acoustic", name: "Acoustic / Live", icon: "🎻", desc: "Natural warm balance for strings & instruments" },
-    { id: "Treble Boost", name: "Treble Boost", icon: "🔔", desc: "Airy, crisp, high-frequency brightness" },
-    { id: "Late Night", name: "Late Night Mode", icon: "🌙", desc: "Reduced bass rumble with clear quiet speech" }
+    { id: "Flat", name: "Flat (Original)", icon: "\uf1de", desc: "Pure unprocessed audio with 0 dB flat response" },
+    { id: "Bass Boost", name: "Bass Boost", icon: "\uf028", desc: "Enhanced low-end sub-bass & kick drum punch" },
+    { id: "Rock", name: "Rock & Metal", icon: "\uf0e7", desc: "Punchy low-mids and crisp treble drive" },
+    { id: "Electronic", name: "Electronic / EDM", icon: "\uf025", desc: "Deep club bass with sparkling highs" },
+    { id: "Pop", name: "Pop / Modern", icon: "\uf005", desc: "Warm vocal focus with balanced soundstage" },
+    { id: "Vocal Clarity", name: "Vocal Clarity", icon: "\uf130", desc: "Clear voice boost for speech, podcasts & lyrics" },
+    { id: "Acoustic", name: "Acoustic / Live", icon: "\uf001", desc: "Natural warm balance for strings & instruments" },
+    { id: "Treble Boost", name: "Treble Boost", icon: "\uf0f3", desc: "Airy, crisp, high-frequency brightness" },
+    { id: "Late Night", name: "Late Night Mode", icon: "\uf186", desc: "Reduced bass rumble with clear quiet speech" }
   ]
 
   width: parent ? parent.width : 0
@@ -96,6 +96,8 @@ BorderSurface {
 
               Text {
                 text: modelData.icon
+                color: presetRow.isActive ? Color.accent : (p ? p.foreground : "#fff")
+                font.family: p ? p.fontFamily : "sans-serif"
                 font.pixelSize: Style.font.caption
                 anchors.verticalCenter: parent.verticalCenter
               }

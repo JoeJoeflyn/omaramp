@@ -11,41 +11,41 @@ BorderSurface {
 
   readonly property var allModes: [
     // Classic & VU
-    { id: "bars", name: "Bars", category: "classic", icon: "📊" },
-    { id: "classic_led", name: "Classic LED", category: "classic", icon: "🟢" },
-    { id: "peaks", name: "Peaks", category: "classic", icon: "📶" },
-    { id: "columns", name: "Columns", category: "classic", icon: "🏛" },
-    { id: "bars_dot", name: "Bars Dot", category: "classic", icon: "⠿" },
-    { id: "bars_outline", name: "Bars Outline", category: "classic", icon: "🔲" },
-    { id: "bricks", name: "Bricks", category: "classic", icon: "🧱" },
-    { id: "stereo", name: "Stereo VU", category: "classic", icon: "🎛" },
-    { id: "ascii", name: "ASCII", category: "classic", icon: "▓" },
+    { id: "bars", name: "Bars", category: "classic", icon: "\uf080" },
+    { id: "classic_led", name: "Classic LED", category: "classic", icon: "\uf111" },
+    { id: "peaks", name: "Peaks", category: "classic", icon: "\uf012" },
+    { id: "columns", name: "Columns", category: "classic", icon: "\uf0db" },
+    { id: "bars_dot", name: "Bars Dot", category: "classic", icon: "\uf141" },
+    { id: "bars_outline", name: "Bars Outline", category: "classic", icon: "\uf096" },
+    { id: "bricks", name: "Bricks", category: "classic", icon: "\uf0c9" },
+    { id: "stereo", name: "Stereo VU", category: "classic", icon: "\uf025" },
+    { id: "ascii", name: "ASCII", category: "classic", icon: "\uf121" },
 
     // Wave & Scope
-    { id: "wave", name: "Waveform", category: "scope", icon: "〰" },
-    { id: "scope", name: "XY Scope", category: "scope", icon: "🕸" },
-    { id: "heartbeat", name: "Heartbeat", category: "scope", icon: "💓" },
+    { id: "wave", name: "Waveform", category: "scope", icon: "\uf21e" },
+    { id: "scope", name: "XY Scope", category: "scope", icon: "\uf1fe" },
+    { id: "heartbeat", name: "Heartbeat", category: "scope", icon: "\uf004" },
 
     // Synth & Retro
-    { id: "retro", name: "Retro Synth", category: "retro", icon: "🌅" },
-    { id: "flame", name: "Flame", category: "retro", icon: "🔥" },
-    { id: "pulse", name: "Pulse", category: "retro", icon: "💫" },
-    { id: "matrix", name: "Matrix", category: "retro", icon: "🟢" },
-    { id: "terrain", name: "Terrain", category: "retro", icon: "⛰" },
-    { id: "binary", name: "Binary", category: "retro", icon: "01" },
-    { id: "logo", name: "Logo", category: "retro", icon: "🅰" },
-    { id: "mosaic", name: "Mosaic", category: "retro", icon: "🟨" },
+    { id: "retro", name: "Retro Synth", category: "retro", icon: "\uf185" },
+    { id: "flame", name: "Flame", category: "retro", icon: "\uf06d" },
+    { id: "pulse", name: "Pulse", category: "retro", icon: "\uf111" },
+    { id: "matrix", name: "Matrix", category: "retro", icon: "\uf108" },
+    { id: "terrain", name: "Terrain", category: "retro", icon: "\uf06e" },
+    { id: "binary", name: "Binary", category: "retro", icon: "\uf120" },
+    { id: "logo", name: "Logo", category: "retro", icon: "\uf005" },
+    { id: "mosaic", name: "Mosaic", category: "retro", icon: "\uf009" },
 
     // Particles & Nature
-    { id: "sand", name: "Sand", category: "particle", icon: "⏳" },
-    { id: "firework", name: "Firework", category: "particle", icon: "🎆" },
-    { id: "geyser", name: "Geyser", category: "particle", icon: "⛲" },
-    { id: "firefly", name: "Firefly", category: "particle", icon: "✨" },
-    { id: "sakura", name: "Sakura", category: "particle", icon: "🌸" },
-    { id: "bubbles", name: "Bubbles", category: "particle", icon: "🫧" },
-    { id: "rain", name: "Rain", category: "particle", icon: "🌧" },
-    { id: "butterfly", name: "Butterfly", category: "particle", icon: "🦋" },
-    { id: "scatter", name: "Scatter", category: "particle", icon: "🌌" }
+    { id: "sand", name: "Sand", category: "particle", icon: "\uf252" },
+    { id: "firework", name: "Firework", category: "particle", icon: "\uf0e7" },
+    { id: "geyser", name: "Geyser", category: "particle", icon: "\uf0d0" },
+    { id: "firefly", name: "Firefly", category: "particle", icon: "\uf0eb" },
+    { id: "sakura", name: "Sakura", category: "particle", icon: "\uf004" },
+    { id: "bubbles", name: "Bubbles", category: "particle", icon: "\uf111" },
+    { id: "rain", name: "Rain", category: "particle", icon: "\uf043" },
+    { id: "butterfly", name: "Butterfly", category: "particle", icon: "\uf1d8" },
+    { id: "scatter", name: "Scatter", category: "particle", icon: "\uf005" }
   ]
 
   readonly property var filteredModes: {
@@ -171,6 +171,8 @@ BorderSurface {
 
               Text {
                 text: modelData.icon
+                color: chip.isActive ? "#000000" : (chipMouse.containsMouse ? Color.accent : (p ? p.dim : "#888"))
+                font.family: p ? p.fontFamily : "sans-serif"
                 font.pixelSize: Style.font.caption * 0.8
                 anchors.verticalCenter: parent.verticalCenter
               }
