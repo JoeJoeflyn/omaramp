@@ -1,4 +1,4 @@
-// SoundCloud Wave — Asymmetrical top-heavy waveform with subtle bottom reflection & progress split
+// SoundCloud Wave — Ultra-thin high-density asymmetrical waveform with subtle reflection
 .pragma library
 .import "helpers.js" as H
 
@@ -9,21 +9,21 @@ function render(ctx, d) {
   var progress = d.progress !== undefined ? d.progress : (d.state ? d.state.progress || 0 : 0)
   var beatDrop = d.beatDrop || 0
 
-  // 52 crisp vertical bars with asymmetrical reflection
-  var numBars = 52
+  // 84 ultra-thin vertical bars
+  var numBars = 84
   var resampled = H.resampleBandsLinear(bands, numBars)
 
   // Layout geometry
   var margin = 6
   var totalDrawW = w - margin * 2
-  var gap = 2.0
-  var barW = Math.max(2.0, (totalDrawW - (numBars - 1) * gap) / numBars)
+  var gap = 1.4
+  var barW = Math.max(1.2, (totalDrawW - (numBars - 1) * gap) / numBars)
   var actualW = numBars * barW + (numBars - 1) * gap
   var startX = margin + (totalDrawW - actualW) / 2.0
   var playheadX = startX + progress * actualW
 
-  // Baseline positioned at 66% down (leaving ~66% for top peaks, ~34% for reflection)
-  var baselineY = h * 0.64
+  // Baseline at 66% down
+  var baselineY = h * 0.66
   var maxTopH = baselineY - 4
   var maxBotH = (h - baselineY) - 4
 
@@ -42,7 +42,7 @@ function render(ctx, d) {
     }
   }
 
-  // Draw 52 asymmetrical waveform bars
+  // Draw 84 thin waveform bars
   for (var i = 0; i < numBars; i++) {
     var bx = startX + i * (barW + gap)
     var barCenter = bx + barW / 2.0
@@ -50,66 +50,65 @@ function render(ctx, d) {
 
     // Track dynamic profile envelope
     var env = Math.sin((i / numBars) * Math.PI)
-    var shapeVal = 0.18 + env * 0.46 + Math.sin(i * 0.75 + 0.4) * 0.14
+    var shapeVal = 0.16 + env * 0.48 + Math.sin(i * 0.55 + 0.2) * 0.12 + Math.sin(i * 1.3) * 0.08
     var energy = isPlaying ? (resampled[i] || 0) : 0.0
-    var kick = (i >= 2 && i <= 12) ? (beatDrop * 0.22) : 0.0
+    var kick = (i >= 3 && i <= 18) ? (beatDrop * 0.20) : 0.0
 
     // Top peak height
-    var topNorm = Math.min(1.0, shapeVal * 0.40 + energy * 0.65 + kick)
-    var topH = Math.max(3.0, topNorm * maxTopH)
+    var topNorm = Math.min(1.0, shapeVal * 0.42 + energy * 0.62 + kick)
+    var topH = Math.max(2.5, topNorm * maxTopH)
 
-    // Bottom reflection height (~32% of top peak)
-    var botH = Math.max(2.0, topH * 0.32)
+    // Bottom reflection height (~28% of top peak)
+    var botH = Math.max(1.5, topH * 0.28)
 
     var topY = baselineY - topH
-    var botY = baselineY + 1.5 // 1.5px horizon slit
-    var r = Math.min(barW / 2.0, 1.5)
+    var botY = baselineY + 1.2 // 1.2px horizon slit
+    var r = Math.min(barW / 2.0, 0.8)
 
     if (isPlayed) {
-      // ── Played Top Bar: Radiant glowing accent gradient with white-hot tip ──
+      // ── Played Top Bar: Radiant glowing accent gradient ──
       var topGrad = ctx.createLinearGradient(0, topY, 0, baselineY)
       topGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)")
-      topGrad.addColorStop(0.25, "rgba(" + Math.min(255, ar + 50) + "," + Math.min(255, ag + 40) + ", 255, 0.95)")
+      topGrad.addColorStop(0.20, "rgba(" + Math.min(255, ar + 50) + "," + Math.min(255, ag + 40) + ", 255, 0.95)")
       topGrad.addColorStop(1, "rgba(" + ar + "," + ag + "," + ab + ", 0.85)")
       ctx.fillStyle = topGrad
       ctx.beginPath()
       H.roundedRect(ctx, bx, topY, barW, topH, r)
       ctx.fill()
 
-      // ── Played Bottom Reflection: Muted accent with shadow falloff ──
+      // ── Played Bottom Reflection ──
       var botGrad = ctx.createLinearGradient(0, botY, 0, botY + botH)
-      botGrad.addColorStop(0, "rgba(" + ar + "," + ag + "," + ab + ", 0.55)")
-      botGrad.addColorStop(1, "rgba(" + ar + "," + ag + "," + ab + ", 0.15)")
+      botGrad.addColorStop(0, "rgba(" + ar + "," + ag + "," + ab + ", 0.50)")
+      botGrad.addColorStop(1, "rgba(" + ar + "," + ag + "," + ab + ", 0.12)")
       ctx.fillStyle = botGrad
       ctx.beginPath()
       H.roundedRect(ctx, bx, botY, barW, botH, r)
       ctx.fill()
     } else {
       // ── Unplayed Top Bar: Clean translucent white ──
-      ctx.fillStyle = "rgba(255, 255, 255, 0.28)"
+      ctx.fillStyle = "rgba(255, 255, 255, 0.25)"
       ctx.beginPath()
       H.roundedRect(ctx, bx, topY, barW, topH, r)
       ctx.fill()
 
-      // ── Unplayed Bottom Reflection: Deep translucent dim ──
-      ctx.fillStyle = "rgba(255, 255, 255, 0.10)"
+      // ── Unplayed Bottom Reflection ──
+      ctx.fillStyle = "rgba(255, 255, 255, 0.08)"
       ctx.beginPath()
       H.roundedRect(ctx, bx, botY, barW, botH, r)
       ctx.fill()
     }
   }
 
-  // ── Crisp Playhead Needle ──
+  // ── Crisp Thin Playhead Needle ──
   if (isPlaying && actualW > 0) {
     var curX = Math.max(startX, Math.min(startX + actualW, playheadX))
 
-    // Vertical line spanning top peak to reflection
     ctx.fillStyle = "#ffffff"
-    ctx.fillRect(curX - 1, 4, 2, h - 8)
+    ctx.fillRect(curX - 0.75, 4, 1.5, h - 8)
 
     // Glowing tip at top of playhead
     ctx.beginPath()
-    ctx.arc(curX, 5, 2.5, 0, Math.PI * 2)
+    ctx.arc(curX, 5, 2.0, 0, Math.PI * 2)
     ctx.fillStyle = "#ffffff"
     ctx.fill()
   }

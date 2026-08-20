@@ -34,10 +34,8 @@ import "visualizers/stereo.js" as VisStereo
 import "visualizers/ascii.js" as VisAscii
 import "visualizers/sine.js" as VisSine
 import "visualizers/siriwave.js" as VisSiriWave
-import "visualizers/scrubber_wave.js" as VisScrubberWave
 import "visualizers/soundcloud_wave.js" as VisSoundCloudWave
-import "visualizers/dj_spectral.js" as VisDJSpectral
-import "visualizers/voice_pill.js" as VisVoicePill
+import "visualizers/telegram_wave.js" as VisTelegramWave
 
 // HUD header + visualizer canvas + seek bar
 Item {
@@ -120,9 +118,8 @@ Item {
     "terrain": VisTerrain.render, "logo": VisLogo.render, "firefly": VisFirefly.render,
     "geyser": VisGeyser.render, "mosaic": VisMosaic.render, "sand": VisSand.render,
     "stereo": VisStereo.render, "ascii": VisAscii.render, "sine": VisSine.render,
-    "siriwave": VisSiriWave.render, "scrubber_wave": VisScrubberWave.render,
-    "soundcloud_wave": VisSoundCloudWave.render, "dj_spectral": VisDJSpectral.render,
-    "voice_pill": VisVoicePill.render
+    "siriwave": VisSiriWave.render, "soundcloud_wave": VisSoundCloudWave.render,
+    "telegram_wave": VisTelegramWave.render
   })
 
   readonly property var _modeLabels: ({
@@ -136,9 +133,8 @@ Item {
     "terrain": "Terrain", "logo": "Logo", "firefly": "Firefly",
     "geyser": "Geyser", "mosaic": "Mosaic", "sand": "Sand",
     "stereo": "Stereo", "ascii": "Ascii", "sine": "Sine Wave",
-    "siriwave": "Siri Wave", "scrubber_wave": "Scrubber Wave",
-    "soundcloud_wave": "SoundCloud Wave", "dj_spectral": "DJ Spectral Wave",
-    "voice_pill": "Voice Pill Wave"
+    "siriwave": "Siri Wave", "soundcloud_wave": "SoundCloud Wave",
+    "telegram_wave": "Telegram Wave"
   })
 
   function requestPaint() { if (visCanvas) visCanvas.requestPaint() }

@@ -1,4 +1,4 @@
-// Voice Pill Wave — Telegram & WhatsApp style high-density rounded micro-capsules
+// Telegram Wave — Telegram & WhatsApp voice message rounded capsule waveform
 .pragma library
 .import "helpers.js" as H
 
@@ -10,21 +10,21 @@ function render(ctx, d) {
   var beatDrop = d.beatDrop || 0
   var midY = h / 2.0
 
-  // 64 high-density micro-pills
-  var numPills = 64
+  // 56 rounded capsule pills
+  var numPills = 56
   var resampled = H.resampleBandsLinear(bands, numPills)
 
   var margin = 6
   var totalDrawW = w - margin * 2
-  var gap = 2.0
-  var pillW = Math.max(2.0, (totalDrawW - (numPills - 1) * gap) / numPills)
+  var gap = 2.4
+  var pillW = Math.max(2.4, (totalDrawW - (numPills - 1) * gap) / numPills)
   var actualW = numPills * pillW + (numPills - 1) * gap
   var startX = margin + (totalDrawW - actualW) / 2.0
   var playheadX = startX + progress * actualW
 
   // Dynamic accent color
   var acc = d.accent
-  var ar = 0, ag = 200, ab = 140 // Elegant emerald/cyan fallback
+  var ar = 0, ag = 200, ab = 140 // Elegant telegram teal fallback
   if (acc) {
     if (typeof acc === "string" && acc.charAt(0) === "#" && acc.length === 7) {
       ar = parseInt(acc.substr(1, 2), 16)
@@ -37,7 +37,7 @@ function render(ctx, d) {
     }
   }
 
-  // Draw 64 micro-capsule pills
+  // Draw 56 micro-capsule pills
   for (var i = 0; i < numPills; i++) {
     var px = startX + i * (pillW + gap)
     var pillCenter = px + pillW / 2.0
@@ -45,11 +45,11 @@ function render(ctx, d) {
 
     // Dynamic voice message amplitude contour
     var env = Math.sin((i / numPills) * Math.PI)
-    var shapeVal = 0.15 + env * 0.50 + Math.sin(i * 0.85 + 0.3) * 0.15
+    var shapeVal = 0.18 + env * 0.48 + Math.sin(i * 0.85 + 0.3) * 0.14
     var energy = isPlaying ? (resampled[i] || 0) : 0.0
     var kick = (i >= 2 && i <= 10) ? (beatDrop * 0.20) : 0.0
 
-    var pillH = Math.max(pillW, ((shapeVal * 0.40) + (energy * 0.60) + kick) * (h * 0.84))
+    var pillH = Math.max(pillW, ((shapeVal * 0.38) + (energy * 0.62) + kick) * (h * 0.84))
     var py = midY - (pillH / 2.0)
     var r = pillW / 2.0
 

@@ -23,10 +23,8 @@ BorderSurface {
 
     // Wave & Scope
     { id: "siriwave", name: "Siri Wave", category: "scope", icon: "\uf179" },
-    { id: "scrubber_wave", name: "Scrubber Wave", category: "scope", icon: "\uf080" },
     { id: "soundcloud_wave", name: "SoundCloud Wave", category: "scope", icon: "\uf1be" },
-    { id: "dj_spectral", name: "DJ Spectral Wave", category: "scope", icon: "\uf025" },
-    { id: "voice_pill", name: "Voice Pill Wave", category: "scope", icon: "\uf130" },
+    { id: "telegram_wave", name: "Telegram Wave", category: "scope", icon: "\uf130" },
     { id: "wave", name: "Waveform", category: "scope", icon: "\uf21e" },
     { id: "scope", name: "XY Scope", category: "scope", icon: "\uf1fe" },
     { id: "sine", name: "Sine Wave", category: "scope", icon: "\uf1d8" },
@@ -88,7 +86,7 @@ BorderSurface {
       Text {
         width: parent.width - Style.space(48)
         anchors.verticalCenter: parent.verticalCenter
-        text: "Visualizer Styles (35)"
+        text: "Visualizer Styles (33)"
         color: p ? p.foreground : "#fff"
         font.family: p ? p.fontFamily : "sans-serif"
         font.pixelSize: Style.font.caption; font.bold: true
