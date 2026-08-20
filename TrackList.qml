@@ -100,34 +100,84 @@ Column {
     }
   }
 
-  // Tabs + Daemon Power
+  // Styled Pill Tabs + Daemon Status
   Row {
-    width: parent.width; spacing: Style.space(6)
+    width: parent.width
+    spacing: Style.space(4)
 
-    Button {
+    // Search Tab Pill
+    BorderSurface {
       visible: p.selectedTab === "search" || p.searchResults.length > 0 || p.isSearching
-      text: "Search (" + p.searchResults.length + ")"
-      fontFamily: p.fontFamily; fontSize: Style.font.caption; bordered: false
-      foreground: p.selectedTab === "search" ? Color.accent : p.dim; accent: Color.accent
-      onClicked: p.selectedTab = "search"
+      implicitHeight: Style.space(22)
+      implicitWidth: searchTabText.implicitWidth + Style.space(14)
+      radius: Style.cornerRadius
+      color: p.selectedTab === "search" ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18) : "transparent"
+      borderSpec: p.selectedTab === "search" ? Border.flat(Color.accent, 1) : Border.none
+
+      Text {
+        id: searchTabText
+        anchors.centerIn: parent
+        text: "Search (" + p.searchResults.length + ")"
+        color: p.selectedTab === "search" ? Color.accent : p.dim
+        font.family: p.fontFamily; font.pixelSize: Style.font.caption
+        font.bold: p.selectedTab === "search"
+      }
+
+      MouseArea {
+        anchors.fill: parent; cursorShape: Qt.PointingHandCursor; hoverEnabled: true
+        onClicked: p.selectedTab = "search"
+      }
     }
 
-    Button {
-      text: "Recents (" + p.historyList.length + ")"
-      fontFamily: p.fontFamily; fontSize: Style.font.caption; bordered: false
-      foreground: p.selectedTab === "history" ? Color.accent : p.dim; accent: Color.accent
-      onClicked: { p.selectedTab = "history"; p.loadHistory() }
+    // Recents Tab Pill
+    BorderSurface {
+      implicitHeight: Style.space(22)
+      implicitWidth: recentsTabText.implicitWidth + Style.space(14)
+      radius: Style.cornerRadius
+      color: p.selectedTab === "history" ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18) : "transparent"
+      borderSpec: p.selectedTab === "history" ? Border.flat(Color.accent, 1) : Border.none
+
+      Text {
+        id: recentsTabText
+        anchors.centerIn: parent
+        text: "Recents (" + p.historyList.length + ")"
+        color: p.selectedTab === "history" ? Color.accent : p.dim
+        font.family: p.fontFamily; font.pixelSize: Style.font.caption
+        font.bold: p.selectedTab === "history"
+      }
+
+      MouseArea {
+        anchors.fill: parent; cursorShape: Qt.PointingHandCursor; hoverEnabled: true
+        onClicked: { p.selectedTab = "history"; p.loadHistory() }
+      }
     }
 
-    Button {
-      text: "Playlists (" + p.playlistsList.length + ")"
-      fontFamily: p.fontFamily; fontSize: Style.font.caption; bordered: false
-      foreground: p.selectedTab === "playlists" ? Color.accent : p.dim; accent: Color.accent
-      onClicked: { p.selectedTab = "playlists"; p.loadPlaylists() }
+    // Playlists Tab Pill
+    BorderSurface {
+      implicitHeight: Style.space(22)
+      implicitWidth: plTabText.implicitWidth + Style.space(14)
+      radius: Style.cornerRadius
+      color: p.selectedTab === "playlists" ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18) : "transparent"
+      borderSpec: p.selectedTab === "playlists" ? Border.flat(Color.accent, 1) : Border.none
+
+      Text {
+        id: plTabText
+        anchors.centerIn: parent
+        text: "Playlists (" + p.playlistsList.length + ")"
+        color: p.selectedTab === "playlists" ? Color.accent : p.dim
+        font.family: p.fontFamily; font.pixelSize: Style.font.caption
+        font.bold: p.selectedTab === "playlists"
+      }
+
+      MouseArea {
+        anchors.fill: parent; cursorShape: Qt.PointingHandCursor; hoverEnabled: true
+        onClicked: { p.selectedTab = "playlists"; p.loadPlaylists() }
+      }
     }
 
-    Item { width: Style.space(8) }
+    Item { width: Style.space(4) }
 
+    // Daemon status icon
     PanelActionButton {
       iconText: "\uf011"
       tooltipText: p.isRunning ? "Stop background daemon" : "Daemon idle"
@@ -137,106 +187,125 @@ Column {
     }
   }
 
-  // Track List Scroller
+  // Scrollable Track / Playlist Container
   Flickable {
-    width: parent.width; implicitHeight: Style.space(160)
-    contentWidth: width; contentHeight: listCol.implicitHeight
-    clip: true; boundsBehavior: Flickable.StopAtBounds
+    width: parent.width
+    implicitHeight: Style.space(168)
+    contentWidth: width
+    contentHeight: listCol.implicitHeight
+    clip: true
+    boundsBehavior: Flickable.StopAtBounds
     ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
     Column {
       id: listCol
-      width: parent.width; spacing: Style.space(2)
+      width: parent.width
+      spacing: Style.space(3)
 
-      // Searching indicator
+      // ==========================================
+      // SEARCH TAB CONTENT
+      // ==========================================
       Item {
         visible: p.selectedTab === "search" && p.isSearching
         width: parent.width; implicitHeight: Style.space(40)
         Row {
           anchors.centerIn: parent; spacing: Style.space(8)
-          Text { anchors.verticalCenter: parent.verticalCenter; text: "\uf110"; color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.bodySmall }
+          Text { anchors.verticalCenter: parent.verticalCenter; text: "\uf110"; color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.bodySmall; RotationAnimator on rotation { running: p.isSearching; from: 0; to: 360; duration: 1000; loops: Animation.Infinite } }
           Text { anchors.verticalCenter: parent.verticalCenter; text: "Searching for \"" + p.searchQuery + "\"..."; color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption }
         }
       }
 
-      // No results
       Item {
         visible: p.selectedTab === "search" && !p.isSearching && p.searchResults.length === 0 && p.searchQuery !== ""
         width: parent.width; implicitHeight: Style.space(40)
         Text { anchors.centerIn: parent; text: "No tracks found for \"" + p.searchQuery + "\""; color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption }
       }
 
-      // Search Results
       Repeater {
-        model: p.selectedTab === "search" && !p.isSearching ? p.searchResults : []
+        model: (p.selectedTab === "search" && !p.isSearching) ? p.searchResults : []
         delegate: BorderSurface {
-          id: searchRow
+          id: sRow
           readonly property bool isCurrent: (p.currentUrl === modelData.url) || (p.currentTrack === modelData.title && p.currentTrack !== "No track loaded")
-          width: parent.width; implicitHeight: Style.space(34); radius: Style.cornerRadius
-          color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : (searchMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
+          width: parent.width; implicitHeight: Style.space(32); radius: Style.cornerRadius
+          color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14) : (sRowMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
           borderSpec: isCurrent ? Border.flat(Color.accent, 1) : Border.none
 
-          Row {
-            width: parent.width - Style.space(10); anchors.centerIn: parent; spacing: Style.space(8)
+          MouseArea {
+            id: sRowMouse
+            anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+            onClicked: { if (modelData.url) p.playUrl(modelData.url, modelData.title, modelData.artist) }
+          }
 
-            // Rounded thumbnail
+          Row {
+            anchors.fill: parent; anchors.margins: Style.space(4); spacing: Style.space(6)
+
+            // Thumbnail
             BorderSurface {
-              width: Style.space(26); height: Style.space(26); radius: Style.space(3)
-              color: Qt.rgba(0.1, 0.1, 0.14, 0.9)
-              borderSpec: Border.none
+              width: Style.space(24); height: Style.space(24); radius: Style.space(3)
+              color: Qt.rgba(0.1, 0.1, 0.14, 0.9); borderSpec: Border.none
               anchors.verticalCenter: parent.verticalCenter
 
               Image {
                 visible: modelData.thumb !== undefined && modelData.thumb !== ""
                 anchors.fill: parent
                 source: modelData.thumb ? "file://" + modelData.thumb : ""
-                fillMode: Image.PreserveAspectCrop; sourceSize.width: 52; sourceSize.height: 52
+                fillMode: Image.PreserveAspectCrop; sourceSize.width: 48; sourceSize.height: 48
               }
-
               Text {
                 visible: !modelData.thumb
-                anchors.centerIn: parent
-                text: "\uf001"; color: searchRow.isCurrent ? Color.accent : p.dim
+                anchors.centerIn: parent; text: "\uf001"; color: sRow.isCurrent ? Color.accent : p.dim
                 font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8
               }
             }
 
-            // Play / Loading icon
+            // Play / Loading status icon
             Text {
               visible: p.loadingVid === modelData.url
               anchors.verticalCenter: parent.verticalCenter
-              text: "\uf110"; color: Color.accent
-              font.family: p.fontFamily; font.pixelSize: Style.font.caption
+              text: "\uf110"; color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.caption
               RotationAnimator on rotation { running: visible; from: 0; to: 360; duration: 1000; loops: Animation.Infinite }
             }
 
             Text {
               visible: p.loadingVid !== modelData.url
               anchors.verticalCenter: parent.verticalCenter
-              text: searchRow.isCurrent && p.isPlaying ? "\uf04c" : "\uf04b"
-              color: searchRow.isCurrent ? Color.accent : (searchMouse.containsMouse ? Color.accent : p.dim)
+              text: sRow.isCurrent && p.isPlaying ? "\uf04c" : "\uf04b"
+              color: sRow.isCurrent ? Color.accent : (sRowMouse.containsMouse ? Color.accent : p.dim)
               font.family: p.fontFamily; font.pixelSize: Style.font.caption
             }
 
             // Title & Artist
             Column {
-              width: parent.width - Style.space(80)
+              width: parent.width - Style.space(90)
               anchors.verticalCenter: parent.verticalCenter; spacing: 1
 
               Text {
                 width: parent.width; textFormat: Text.PlainText
                 text: modelData.title || "Track"
-                color: searchRow.isCurrent ? Color.accent : p.foreground
+                color: sRow.isCurrent ? Color.accent : p.foreground
                 font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
                 elide: Text.ElideRight
               }
-
               Text {
-                width: parent.width; textFormat: Text.PlainText
-                text: modelData.artist || "Unknown Artist"
-                color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.85
-                elide: Text.ElideRight
                 visible: modelData.artist !== ""
+                width: parent.width; textFormat: Text.PlainText
+                text: modelData.artist || ""
+                color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.82
+                elide: Text.ElideRight
+              }
+            }
+
+            // Add to Queue button
+            Text {
+              z: 2
+              anchors.verticalCenter: parent.verticalCenter
+              text: "\uf067"
+              color: sQueueMouse.containsMouse ? Color.accent : p.dim
+              font.family: p.fontFamily; font.pixelSize: Style.font.caption
+              MouseArea {
+                id: sQueueMouse
+                anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                onClicked: p.queueUrl(modelData.url, modelData.title, modelData.artist)
               }
             }
 
@@ -247,85 +316,97 @@ Column {
               color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
             }
           }
-
-          MouseArea {
-            id: searchMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-            onClicked: { if (modelData.url) p.playUrl(modelData.url, modelData.title, modelData.artist) }
-          }
         }
       }
 
-      // Recently Played
+      // ==========================================
+      // RECENTS TAB CONTENT
+      // ==========================================
       Repeater {
         model: p.selectedTab === "history" ? p.historyList : []
         delegate: BorderSurface {
-          id: trackRow
+          id: hRow
           readonly property bool isCurrent: (p.currentUrl === modelData.path) || (p.currentTrack === modelData.title && p.currentTrack !== "No track loaded")
-          width: parent.width; implicitHeight: Style.space(34); radius: Style.cornerRadius
-          color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : (trackMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
+          width: parent.width; implicitHeight: Style.space(32); radius: Style.cornerRadius
+          color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14) : (hRowMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
           borderSpec: isCurrent ? Border.flat(Color.accent, 1) : Border.none
 
-          Row {
-            width: parent.width - Style.space(10); anchors.centerIn: parent; spacing: Style.space(8)
+          MouseArea {
+            id: hRowMouse
+            anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+            onClicked: { if (modelData.path) p.playUrl(modelData.path, modelData.title, modelData.artist) }
+          }
 
-            // Rounded thumbnail
+          Row {
+            anchors.fill: parent; anchors.margins: Style.space(4); spacing: Style.space(6)
+
+            // Thumbnail
             BorderSurface {
-              width: Style.space(26); height: Style.space(26); radius: Style.space(3)
-              color: Qt.rgba(0.1, 0.1, 0.14, 0.9)
-              borderSpec: Border.none
+              width: Style.space(24); height: Style.space(24); radius: Style.space(3)
+              color: Qt.rgba(0.1, 0.1, 0.14, 0.9); borderSpec: Border.none
               anchors.verticalCenter: parent.verticalCenter
 
               Image {
                 visible: modelData.thumb !== undefined && modelData.thumb !== ""
                 anchors.fill: parent
                 source: modelData.thumb ? "file://" + modelData.thumb : ""
-                fillMode: Image.PreserveAspectCrop; sourceSize.width: 52; sourceSize.height: 52
+                fillMode: Image.PreserveAspectCrop; sourceSize.width: 48; sourceSize.height: 48
               }
-
               Text {
                 visible: !modelData.thumb
-                anchors.centerIn: parent
-                text: "\uf001"; color: trackRow.isCurrent ? Color.accent : p.dim
+                anchors.centerIn: parent; text: "\uf001"; color: hRow.isCurrent ? Color.accent : p.dim
                 font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8
               }
             }
 
-            // Play / Status Icon
+            // Play / Loading icon
             Text {
               visible: p.loadingVid === modelData.path
               anchors.verticalCenter: parent.verticalCenter
-              text: "\uf110"; color: Color.accent
-              font.family: p.fontFamily; font.pixelSize: Style.font.caption
+              text: "\uf110"; color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.caption
               RotationAnimator on rotation { running: visible; from: 0; to: 360; duration: 1000; loops: Animation.Infinite }
             }
 
             Text {
               visible: p.loadingVid !== modelData.path
               anchors.verticalCenter: parent.verticalCenter
-              text: trackRow.isCurrent && p.isPlaying ? "\uf04c" : "\uf04b"
-              color: trackRow.isCurrent ? Color.accent : (trackMouse.containsMouse ? Color.accent : p.dim)
+              text: hRow.isCurrent && p.isPlaying ? "\uf04c" : "\uf04b"
+              color: hRow.isCurrent ? Color.accent : (hRowMouse.containsMouse ? Color.accent : p.dim)
               font.family: p.fontFamily; font.pixelSize: Style.font.caption
             }
 
             // Title & Artist
             Column {
-              width: parent.width - Style.space(80)
+              width: parent.width - Style.space(90)
               anchors.verticalCenter: parent.verticalCenter; spacing: 1
 
               Text {
                 width: parent.width; textFormat: Text.PlainText
                 text: modelData.title || "Track"
-                color: trackRow.isCurrent ? Color.accent : p.foreground
+                color: hRow.isCurrent ? Color.accent : p.foreground
                 font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
                 elide: Text.ElideRight
               }
-
               Text {
-                width: parent.width; textFormat: Text.PlainText
-                text: modelData.artist || "Unknown Artist"
-                color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.85
-                elide: Text.ElideRight
                 visible: modelData.artist !== ""
+                width: parent.width; textFormat: Text.PlainText
+                text: modelData.artist || ""
+                color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.82
+                elide: Text.ElideRight
+              }
+            }
+
+            // Add to Queue button
+            Text {
+              z: 2
+              anchors.verticalCenter: parent.verticalCenter
+              text: "\uf067"
+              color: hQueueMouse.containsMouse ? Color.accent : p.dim
+              font.family: p.fontFamily; font.pixelSize: Style.font.caption
+              MouseArea {
+                id: hQueueMouse
+                anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                onClicked: p.queueUrl(modelData.path, modelData.title, modelData.artist)
               }
             }
 
@@ -340,50 +421,56 @@ Column {
               color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
             }
           }
-
-          MouseArea {
-            id: trackMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-            onClicked: { if (modelData.path) p.playUrl(modelData.path, modelData.title, modelData.artist) }
-          }
         }
       }
 
-      // Playlists Tab
+      // ==========================================
+      // PLAYLISTS TAB CONTENT
+      // ==========================================
       Column {
         visible: p.selectedTab === "playlists"
         width: parent.width
         spacing: Style.space(6)
 
-        // Sub-view: Active Playlist Tracks Browser
+        // ----------------------------------------------------
+        // SUBVIEW 1: ACTIVE PLAYLIST TRACKS BROWSER
+        // ----------------------------------------------------
         Column {
           visible: p.activePlaylist !== null
           width: parent.width
-          spacing: Style.space(6)
+          spacing: Style.space(4)
 
-          // Header with Back, Title, Play All, Delete
+          // Header Card with Back, Title, Play All, Delete
           BorderSurface {
             width: parent.width; implicitHeight: Style.space(32); radius: Style.cornerRadius
             color: Color.popups.background
             borderSpec: Border.controlSpec("normal", p.foreground, Color.accent)
 
             Row {
-              anchors.fill: parent; anchors.margins: Style.space(6); spacing: Style.space(6)
+              anchors.fill: parent; anchors.margins: Style.space(6); spacing: Style.space(8)
 
               // Back button
-              Text {
+              BorderSurface {
+                width: Style.space(22); height: Style.space(20); radius: Style.cornerRadius
+                color: backMouse.containsMouse ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25) : Qt.rgba(1, 1, 1, 0.06)
+                borderSpec: Border.none
                 anchors.verticalCenter: parent.verticalCenter
-                text: "\uf060"
-                color: backMouse.containsMouse ? Color.accent : p.foreground
-                font.family: p.fontFamily; font.pixelSize: Style.font.caption
+
+                Text {
+                  anchors.centerIn: parent; text: "\uf060"
+                  color: backMouse.containsMouse ? Color.accent : p.foreground
+                  font.family: p.fontFamily; font.pixelSize: Style.font.caption
+                }
                 MouseArea {
-                  id: backMouse; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                  id: backMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                   onClicked: p.closePlaylist()
                 }
               }
 
-              // Playlist title + count
+              // Title + Count
               Text {
-                width: parent.width - Style.space(110); anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - Style.space(130)
+                anchors.verticalCenter: parent.verticalCenter
                 textFormat: Text.PlainText
                 text: (p.activePlaylist ? p.activePlaylist.name : "") + " (" + ((p.activePlaylist && p.activePlaylist.tracks) ? p.activePlaylist.tracks.length : 0) + ")"
                 color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
@@ -391,63 +478,94 @@ Column {
               }
 
               // Play All Button
-              Text {
+              BorderSurface {
+                implicitHeight: Style.space(20)
+                implicitWidth: playAllText.implicitWidth + Style.space(10)
+                radius: Style.cornerRadius
+                color: playAllMouse.containsMouse ? Color.accent : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.2)
+                borderSpec: Border.none
                 anchors.verticalCenter: parent.verticalCenter
-                text: "\uf04b Play"
-                color: playAllMouse.containsMouse ? Color.accent : p.foreground
-                font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+
+                Text {
+                  id: playAllText; anchors.centerIn: parent
+                  text: "\uf04b Play All"
+                  color: playAllMouse.containsMouse ? "#000000" : Color.accent
+                  font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.85; font.bold: true
+                }
                 MouseArea {
-                  id: playAllMouse; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                  id: playAllMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                   onClicked: p.playPlaylist(p.activePlaylist)
                 }
               }
 
-              // Delete button (custom playlists only)
-              Text {
+              // Delete button
+              BorderSurface {
                 visible: p.activePlaylist && !p.activePlaylist.system
+                width: Style.space(20); height: Style.space(20); radius: Style.cornerRadius
+                color: delPlMouse.containsMouse ? Qt.rgba(1, 0, 0, 0.25) : "transparent"
+                borderSpec: Border.none
                 anchors.verticalCenter: parent.verticalCenter
-                text: "\uf1f8"
-                color: delPlMouse.containsMouse ? p.urgent : p.dim
-                font.family: p.fontFamily; font.pixelSize: Style.font.caption
+
+                Text {
+                  anchors.centerIn: parent; text: "\uf1f8"
+                  color: delPlMouse.containsMouse ? p.urgent : p.dim
+                  font.family: p.fontFamily; font.pixelSize: Style.font.caption
+                }
                 MouseArea {
-                  id: delPlMouse; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                  id: delPlMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                   onClicked: p.deletePlaylist(p.activePlaylist.name)
                 }
               }
             }
           }
 
-          // Empty state for active playlist
+          // Empty playlist notice
           Text {
             visible: p.activePlaylist && (!p.activePlaylist.tracks || p.activePlaylist.tracks.length === 0)
-            text: "No tracks in this playlist"
+            text: "No tracks found in this playlist"
             color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
-            horizontalAlignment: Text.AlignHCenter
-            width: parent.width
+            horizontalAlignment: Text.AlignHCenter; width: parent.width
           }
 
-          // Active playlist track items
+          // Individual tracks inside active playlist
           Repeater {
             model: (p.activePlaylist && p.activePlaylist.tracks) ? p.activePlaylist.tracks : []
             delegate: BorderSurface {
               id: plTrackRow
               readonly property bool isCurrent: (p.currentUrl === modelData.url) || (p.currentTrack === modelData.title && p.currentTrack !== "No track loaded")
               width: parent.width; implicitHeight: Style.space(28); radius: Style.cornerRadius
-              color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : (plTrackMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
+              color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : (plTrackRowMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
               borderSpec: isCurrent ? Border.flat(Color.accent, 1) : Border.none
 
-              Row {
-                width: parent.width - Style.space(8); anchors.centerIn: parent; spacing: Style.space(6)
+              MouseArea {
+                id: plTrackRowMouse
+                anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                onClicked: p.playUrl(modelData.url, modelData.title, modelData.artist)
+              }
 
+              Row {
+                anchors.fill: parent; anchors.margins: Style.space(4); spacing: Style.space(6)
+
+                // Track Number
                 Text {
+                  width: Style.space(18); horizontalAlignment: Text.AlignRight
                   anchors.verticalCenter: parent.verticalCenter
-                  text: plTrackRow.isCurrent && p.isPlaying ? "\uf04c" : "\uf04b"
-                  color: plTrackRow.isCurrent ? Color.accent : (plTrackMouse.containsMouse ? Color.accent : p.dim)
+                  text: (index + 1) < 10 ? ("0" + (index + 1)) : String(index + 1)
+                  color: plTrackRow.isCurrent ? Color.accent : p.dim
                   font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8
                 }
 
+                // Play icon
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: plTrackRow.isCurrent && p.isPlaying ? "\uf04c" : "\uf04b"
+                  color: plTrackRow.isCurrent ? Color.accent : (plTrackRowMouse.containsMouse ? Color.accent : p.dim)
+                  font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8
+                }
+
+                // Title & Artist
                 Column {
-                  width: parent.width - Style.space(80); anchors.verticalCenter: parent.verticalCenter; spacing: 1
+                  width: parent.width - Style.space(90); anchors.verticalCenter: parent.verticalCenter; spacing: 1
                   Text {
                     width: parent.width; textFormat: Text.PlainText
                     text: modelData.title || "Track"
@@ -464,53 +582,78 @@ Column {
                   }
                 }
 
+                // Add to Queue Button
+                Text {
+                  z: 2
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "\uf067"
+                  color: plQueueMouse.containsMouse ? Color.accent : p.dim
+                  font.family: p.fontFamily; font.pixelSize: Style.font.caption
+                  MouseArea {
+                    id: plQueueMouse
+                    anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    onClicked: p.queueUrl(modelData.url, modelData.title, modelData.artist)
+                  }
+                }
+
+                // Duration
                 Text {
                   anchors.verticalCenter: parent.verticalCenter
                   text: modelData.duration || ""
                   color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
                 }
               }
-
-              MouseArea {
-                id: plTrackMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                onClicked: p.playUrl(modelData.url, modelData.title, modelData.artist)
-              }
             }
           }
         }
 
-        // Sub-view: Playlists List & Import Bar
+        // ----------------------------------------------------
+        // SUBVIEW 2: PLAYLISTS OVERVIEW & IMPORT BAR
+        // ----------------------------------------------------
         Column {
           visible: p.activePlaylist === null
           width: parent.width
-          spacing: Style.space(6)
+          spacing: Style.space(4)
 
-          // Importing loader
-          Row {
+          // Importing status banner
+          BorderSurface {
             visible: p.isImportingPl
-            width: parent.width; spacing: Style.space(6)
-            Text { anchors.verticalCenter: parent.verticalCenter; text: "\uf110"; color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.caption; RotationAnimator on rotation { running: p.isImportingPl; from: 0; to: 360; duration: 1000; loops: Animation.Infinite } }
-            Text { anchors.verticalCenter: parent.verticalCenter; text: "Importing playlist tracks..."; color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption }
+            width: parent.width; implicitHeight: Style.space(28); radius: Style.cornerRadius
+            color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12)
+            borderSpec: Border.flat(Color.accent, 1)
+
+            Row {
+              anchors.centerIn: parent; spacing: Style.space(6)
+              Text { anchors.verticalCenter: parent.verticalCenter; text: "\uf110"; color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.caption; RotationAnimator on rotation { running: p.isImportingPl; from: 0; to: 360; duration: 1000; loops: Animation.Infinite } }
+              Text { anchors.verticalCenter: parent.verticalCenter; text: "Importing playlist tracks..."; color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true }
+            }
           }
 
-          // Import error
+          // Import error notice
           Text {
             visible: p.plImportError !== ""
             text: p.plImportError
             color: p.urgent; font.family: p.fontFamily; font.pixelSize: Style.font.caption
           }
 
-          // Playlist cards
+          // List of Playlists
           Repeater {
             model: p.playlistsList
             delegate: BorderSurface {
-              id: plRow
-              width: parent.width; implicitHeight: Style.space(32); radius: Style.cornerRadius
-              color: plMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : Color.popups.background
+              id: plCard
+              width: parent.width; implicitHeight: Style.space(34); radius: Style.cornerRadius
+              color: plCardMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : Color.popups.background
               borderSpec: Border.controlSpec("normal", p.foreground, Color.accent)
 
+              // Main row click opens playlist
+              MouseArea {
+                id: plCardMouse
+                anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                onClicked: p.openPlaylist(modelData)
+              }
+
               Row {
-                width: parent.width - Style.space(12); anchors.centerIn: parent; spacing: Style.space(8)
+                anchors.fill: parent; anchors.margins: Style.space(6); spacing: Style.space(8)
 
                 Text {
                   anchors.verticalCenter: parent.verticalCenter
@@ -519,7 +662,7 @@ Column {
                 }
 
                 Column {
-                  width: parent.width - Style.space(80); anchors.verticalCenter: parent.verticalCenter; spacing: 1
+                  width: parent.width - Style.space(90); anchors.verticalCenter: parent.verticalCenter; spacing: 1
                   Text {
                     width: parent.width; textFormat: Text.PlainText
                     text: modelData.name || "Playlist"
@@ -533,13 +676,20 @@ Column {
                 }
 
                 // Quick Play All button
-                Text {
+                BorderSurface {
+                  z: 2
+                  width: Style.space(22); height: Style.space(22); radius: Style.cornerRadius
+                  color: plPlayMouse.containsMouse ? Color.accent : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.15)
+                  borderSpec: Border.none
                   anchors.verticalCenter: parent.verticalCenter
-                  text: "\uf04b"
-                  color: plPlayMouse.containsMouse ? Color.accent : p.dim
-                  font.family: p.fontFamily; font.pixelSize: Style.font.caption
+
+                  Text {
+                    anchors.centerIn: parent; text: "\uf04b"
+                    color: plPlayMouse.containsMouse ? "#000000" : Color.accent
+                    font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8
+                  }
                   MouseArea {
-                    id: plPlayMouse; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    id: plPlayMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                     onClicked: {
                       if (modelData.system) {
                         p.openPlaylist(modelData)
@@ -551,23 +701,25 @@ Column {
                   }
                 }
 
-                // Delete button
-                Text {
+                // Delete playlist button
+                BorderSurface {
+                  z: 2
                   visible: !modelData.system
+                  width: Style.space(22); height: Style.space(22); radius: Style.cornerRadius
+                  color: plDelMouse.containsMouse ? Qt.rgba(1, 0, 0, 0.25) : "transparent"
+                  borderSpec: Border.none
                   anchors.verticalCenter: parent.verticalCenter
-                  text: "\uf1f8"
-                  color: plDelMouse.containsMouse ? p.urgent : p.dim
-                  font.family: p.fontFamily; font.pixelSize: Style.font.caption
+
+                  Text {
+                    anchors.centerIn: parent; text: "\uf1f8"
+                    color: plDelMouse.containsMouse ? p.urgent : p.dim
+                    font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.85
+                  }
                   MouseArea {
-                    id: plDelMouse; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    id: plDelMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                     onClicked: p.deletePlaylist(modelData.name)
                   }
                 }
-              }
-
-              MouseArea {
-                id: plMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                onClicked: p.openPlaylist(modelData)
               }
             }
           }
