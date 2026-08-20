@@ -373,26 +373,62 @@ Item {
         }
       }
 
-      // Visualizer Canvas Frame
+      // Visualizer Canvas Frame with Vibrant Aurora & Artwork Projection
       BorderSurface {
         width: parent.width
-        height: Style.space(48)
+        height: Style.space(52)
         radius: Style.space(4)
-        color: "#08090b"
-        borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.25 + root.beatDropPulse * 0.45) : Qt.rgba(1, 1, 1, 0.08), 1)
+        clip: true
+        color: "#07080b"
+        borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.35 + root.beatDropPulse * 0.45) : Qt.rgba(1, 1, 1, 0.10), 1)
 
-        // Subtle ambient dynamic accent backdrop tint + beat pulse
+        // 1. Blurred Album Artwork Projection
+        Image {
+          anchors.fill: parent
+          source: p.artPath
+          fillMode: Image.PreserveAspectCrop
+          visible: p.artPath !== ""
+          opacity: p.isPlaying ? 0.32 : 0.10
+          smooth: true
+          z: 0
+        }
+
+        // 2. Vibrant Aurora Ambient Gradient (Breathes on beat drops)
         Rectangle {
-          anchors.fill: parent; anchors.margins: 1
-          radius: Style.space(3)
+          anchors.fill: parent
+          z: 1
+          gradient: Gradient {
+            orientation: Gradient.Vertical
+            GradientStop { position: 0.0; color: Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, p.isPlaying ? (0.24 + root.beatDropPulse * 0.26) : 0.06) }
+            GradientStop { position: 0.45; color: Qt.rgba(0.04, 0.05, 0.08, 0.82) }
+            GradientStop { position: 1.0; color: Qt.rgba(p.dynamicAccent.r * 0.6, p.dynamicAccent.g * 0.5, p.dynamicAccent.b * 0.9, p.isPlaying ? (0.20 + root.beatDropPulse * 0.20) : 0.05) }
+          }
+        }
+
+        // 3. Central Luminous Aurora Core (Pulsing sound light)
+        Rectangle {
+          anchors.centerIn: parent
+          width: parent.width * 0.75
+          height: parent.height * 0.85
+          radius: height / 2
           color: p.dynamicAccent
-          opacity: p.isPlaying ? (0.06 + root.beatDropPulse * 0.16) : 0.0
+          opacity: p.isPlaying ? (0.12 + root.beatDropPulse * 0.20) : 0.0
+          z: 2
+        }
+
+        // 4. Subtle Top Glass Highlight
+        Rectangle {
+          anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+          height: 1
+          color: Qt.rgba(1, 1, 1, 0.22)
+          z: 3
         }
 
         Canvas {
           id: visCanvas
           anchors.fill: parent
           anchors.margins: Style.space(3)
+          z: 4
 
           onPaint: {
             root.updateBeatDrop()
