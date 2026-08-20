@@ -180,7 +180,7 @@ def import_playlist(url, custom_name=None):
     if "list=" in url or "youtube.com" in url or "youtu.be" in url:
         try:
             if not pl_name:
-                t_cmd = ["yt-dlp", "--flat-playlist", "--print", "%(playlist_title)s", "--playlist-items", "1", url]
+                t_cmd = ["yt-dlp", "--flat-playlist", "--print", "%(playlist_title)s", "--playlist-items", "1", "--", url]
                 t_res = subprocess.run(t_cmd, capture_output=True, text=True, timeout=6.0)
                 pl_name = t_res.stdout.strip().splitlines()[0] if t_res.stdout.strip() else ""
             
@@ -189,6 +189,7 @@ def import_playlist(url, custom_name=None):
                 "--flat-playlist",
                 "--max-downloads", "50",
                 "--print", "%(id)s\t%(title)s\t%(uploader)s\t%(duration_string)s",
+                "--",
                 url
             ]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=12.0)
@@ -552,6 +553,7 @@ def search_tracks(query, limit=10):
         "yt-dlp",
         "--flat-playlist",
         "--print", "%(id)s\t%(title)s\t%(uploader)s\t%(duration_string)s",
+        "--",
         f"ytsearch{limit}:{query.strip()}"
     ]
     try:
@@ -587,19 +589,23 @@ def search_tracks(query, limit=10):
 def is_youtube_url(url):
     if not url:
         return False
-    parsed = urllib.parse.urlparse(url)
+    parsed = urllib.parse.urlparse(str(url).strip())
     return parsed.scheme in ("http", "https") and parsed.netloc in ("www.youtube.com", "youtube.com", "youtu.be", "music.youtube.com")
 
 def is_safe_url(url):
     if not url:
         return False
-    parsed = urllib.parse.urlparse(url)
+    u = str(url).strip()
+    if u.startswith("-"):
+        return False
+    parsed = urllib.parse.urlparse(u)
     if parsed.scheme in ("http", "https"):
         return True
-    if parsed.scheme == "file":
+    if parsed.scheme in ("file", "data", "javascript", "vbscript"):
         return False
     if not parsed.scheme and not parsed.netloc:
-        return os.path.isfile(url)
+        expanded = os.path.expanduser(u)
+        return os.path.isfile(expanded)
     return False
 
 LYRICS_CACHE = {}
@@ -615,7 +621,7 @@ def fetch_lyrics(title, artist, url=""):
         if " - " not in search_title and is_youtube_url(url or ""):
             try:
                 vid = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", url).group(1)
-                r = subprocess.run(["yt-dlp", "--no-warnings", "--print", "%(title)s", f"https://www.youtube.com/watch?v={vid}"],
+                r = subprocess.run(["yt-dlp", "--no-warnings", "--print", "%(title)s", "--", f"https://www.youtube.com/watch?v={vid}"],
                                    capture_output=True, text=True, timeout=5)
                 full_title = r.stdout.strip()
                 if full_title and " - " in full_title:
@@ -702,7 +708,7 @@ def stream_youtube(url):
     write_fd = os.open(STREAM_FIFO, os.O_WRONLY)
     os.close(read_fd)  # Close our dummy reader — mpv will take over
     subprocess.Popen(
-        ["yt-dlp", "--no-warnings", "-f", "18/best", "-o", "-", url],
+        ["yt-dlp", "--no-warnings", "-f", "18/best", "-o", "-", "--", url],
         stdout=os.fdopen(write_fd, "wb"),
         stderr=subprocess.DEVNULL,
         start_new_session=True
