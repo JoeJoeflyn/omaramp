@@ -373,57 +373,14 @@ Item {
         }
       }
 
-      // Visualizer Canvas Frame — Vivid Neon Color Backdrop
+      // Visualizer Canvas Frame
       BorderSurface {
         width: parent.width
         height: Style.space(52)
         radius: Style.space(4)
         clip: true
-        // Base fill uses full accent color at visible saturation
-        color: Qt.rgba(
-          Math.max(0.08, p.dynamicAccent.r * 0.22),
-          Math.max(0.06, p.dynamicAccent.g * 0.15),
-          Math.max(0.10, p.dynamicAccent.b * 0.25),
-          1.0
-        )
-        borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.80) : Qt.rgba(1, 1, 1, 0.15), 1)
-
-        // 1. Horizontal color wash — vivid edges that you can actually SEE
-        Rectangle {
-          anchors.fill: parent; z: 0
-          gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0.0;  color: Qt.rgba(
-              Math.min(1.0, p.dynamicAccent.r + 0.15),
-              p.dynamicAccent.g * 0.35,
-              Math.min(1.0, p.dynamicAccent.b + 0.10),
-              p.isPlaying ? 0.75 : 0.20
-            )}
-            GradientStop { position: 0.45; color: Qt.rgba(0.06, 0.05, 0.10, 0.70) }
-            GradientStop { position: 1.0;  color: Qt.rgba(
-              Math.min(1.0, p.dynamicAccent.b + 0.10),
-              Math.min(1.0, p.dynamicAccent.r * 0.6 + 0.15),
-              Math.min(1.0, p.dynamicAccent.g + 0.10),
-              p.isPlaying ? 0.70 : 0.18
-            )}
-          }
-        }
-
-        // 2. Central neon bloom — HOT, pulsing with bass
-        Rectangle {
-          anchors.centerIn: parent; z: 1
-          width: parent.width * 0.50; height: parent.height * 1.3
-          radius: width / 2
-          color: Qt.lighter(p.dynamicAccent, 1.4)
-          opacity: p.isPlaying ? (0.50 + root.beatDropPulse * 0.40) : 0.06
-        }
-
-        // 3. Top edge highlight
-        Rectangle {
-          anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
-          height: 1; z: 2
-          color: Qt.rgba(1, 1, 1, 0.35)
-        }
+        color: "#06070a"
+        borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.70) : Qt.rgba(1, 1, 1, 0.12), 1)
 
         Canvas {
           id: visCanvas
@@ -434,13 +391,56 @@ Item {
           onPaint: {
             root.updateBeatDrop()
             var ctx = getContext("2d")
-            ctx.clearRect(0, 0, width, height)
+            var w = width, h = height
+            ctx.clearRect(0, 0, w, h)
+
+            // ── Animated Nebula Plasma Background ──
+            if (p.isPlaying) {
+              var ar = p.dynamicAccent.r, ag = p.dynamicAccent.g, ab = p.dynamicAccent.b
+              var t = p.visFrame * 0.02
+              var beat = root.beatDropPulse
+              var bass = 0
+              if (p.visBands && p.visBands.length > 4) {
+                for (var bi = 0; bi < 5; bi++) bass += (p.visBands[bi] || 0)
+                bass /= 5.0
+              }
+
+              // Paint 5 drifting nebula blobs at different positions
+              var blobs = [
+                { cx: 0.15, cy: 0.35, rx: 0.30, ry: 0.70, r: ar, g: ag * 0.4, b: ab, drift: 1.0 },
+                { cx: 0.85, cy: 0.60, rx: 0.28, ry: 0.65, r: ab * 0.8, g: ar * 0.5, b: ag, drift: -0.7 },
+                { cx: 0.50, cy: 0.50, rx: 0.35, ry: 0.80, r: Math.min(1, ar + 0.2), g: Math.min(1, ag + 0.15), b: Math.min(1, ab + 0.2), drift: 1.3 },
+                { cx: 0.30, cy: 0.70, rx: 0.22, ry: 0.55, r: ag * 0.6, g: ab * 0.7, b: ar * 0.9, drift: -1.1 },
+                { cx: 0.72, cy: 0.30, rx: 0.25, ry: 0.60, r: ab * 0.5, g: ar * 0.8, b: Math.min(1, ag + 0.3), drift: 0.9 }
+              ]
+
+              for (var i = 0; i < blobs.length; i++) {
+                var bl = blobs[i]
+                // Drift position with time
+                var bx = (bl.cx + Math.sin(t * bl.drift + i * 1.5) * 0.12) * w
+                var by = (bl.cy + Math.cos(t * bl.drift * 0.8 + i * 2.0) * 0.15) * h
+                var radiusX = bl.rx * w * (1.0 + bass * 0.4 + beat * 0.3)
+                var radiusY = bl.ry * h * (1.0 + bass * 0.3 + beat * 0.2)
+                var radius = Math.max(radiusX, radiusY)
+
+                var grad = ctx.createRadialGradient(bx, by, 0, bx, by, radius)
+                var alpha = 0.45 + beat * 0.25 + bass * 0.15
+                grad.addColorStop(0, "rgba(" + Math.round(bl.r * 255) + "," + Math.round(bl.g * 255) + "," + Math.round(bl.b * 255) + "," + alpha.toFixed(2) + ")")
+                grad.addColorStop(0.6, "rgba(" + Math.round(bl.r * 180) + "," + Math.round(bl.g * 120) + "," + Math.round(bl.b * 180) + "," + (alpha * 0.35).toFixed(2) + ")")
+                grad.addColorStop(1, "rgba(0,0,0,0)")
+
+                ctx.fillStyle = grad
+                ctx.fillRect(0, 0, w, h)
+              }
+            }
+
+            // ── Visualizer on top ──
             var count = 24, gap = 3
-            var barW = Math.floor((width - (count - 1) * gap) / count)
+            var barW = Math.floor((w - (count - 1) * gap) / count)
             var fn = root._renderers[p.visMode]
             if (fn) fn(ctx, {
               bands: p.visBands, wave: p.visWave, frame: p.visFrame,
-              playing: p.isPlaying, width: width, height: height, S: 2,
+              playing: p.isPlaying, width: w, height: h, S: 2,
               count: count, barW: barW, gap: gap,
               accent: p.dynamicAccent, foreground: p.foreground, dim: p.dim,
               beatDrop: root.beatDropPulse, progress: p.progress,
