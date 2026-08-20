@@ -713,54 +713,67 @@ def stream_youtube(url):
         start_new_session=True
     )
 
-def play_item(url, title=None, artist=None):
-    if not url or not is_safe_url(url):
-        return {"success": False, "error": "unsafe url"}
-    start_mpv_daemon()
-    final_title = title or "Track"
-    final_artist = artist or ""
-    if "spotify.com/track/" in url:
-        spot = resolve_spotify_url(url)
+def resolve_track_url(url, title=None, artist=None):
+    """Resolves any track item (Spotify URL, query string, or local path) to a playable URL and metadata."""
+    if not url:
+        return None, title, artist
+    u = str(url).strip()
+    if u.startswith("-"):
+        return None, title, artist
+    
+    if "spotify.com/track/" in u:
+        spot = resolve_spotify_url(u)
         if spot and spot.get("query"):
             res = search_tracks(spot["query"], limit=1)
             if res:
-                url = res[0]["url"]
-                final_title = spot.get("title") or res[0]["title"]
-                final_artist = spot.get("artist") or res[0]["artist"]
-    record_history(final_title, final_artist, url, 0)
-    save_now_playing(final_title, final_artist, url)
-    if is_youtube_url(url):
-        save_youtube_meta(url, final_title, final_artist)
-        stream_youtube(url)
+                return res[0]["url"], spot.get("title") or res[0]["title"], spot.get("artist") or res[0]["artist"]
+        return None, title, artist
+    
+    parsed = urllib.parse.urlparse(u)
+    if parsed.scheme in ("http", "https"):
+        return u, title or "Track", artist or ""
+    
+    expanded = os.path.expanduser(u)
+    if os.path.isfile(expanded):
+        return expanded, title or os.path.splitext(os.path.basename(expanded))[0], artist or ""
+    
+    query = u if not (title and artist) else f"{title} {artist}"
+    res = search_tracks(query, limit=1)
+    if res:
+        return res[0]["url"], title or res[0]["title"], artist or res[0]["artist"]
+    
+    return None, title, artist
+
+def play_item(url, title=None, artist=None):
+    real_url, final_title, final_artist = resolve_track_url(url, title, artist)
+    if not real_url:
+        return {"success": False, "error": "Unable to resolve track"}
+    start_mpv_daemon()
+    record_history(final_title, final_artist, real_url, 0)
+    save_now_playing(final_title, final_artist, real_url)
+    if is_youtube_url(real_url):
+        save_youtube_meta(real_url, final_title, final_artist)
+        stream_youtube(real_url)
         send_mpv_cmd(["loadfile", STREAM_FIFO, "replace"])
     else:
-        send_mpv_cmd(["loadfile", url, "replace"])
+        send_mpv_cmd(["loadfile", real_url, "replace"])
     send_mpv_cmd(["set_property", "pause", False])
     return {"success": True}
 
 def queue_item(url, title=None, artist=None):
-    if not url or not is_safe_url(url):
-        return {"success": False, "error": "unsafe url"}
+    real_url, final_title, final_artist = resolve_track_url(url, title, artist)
+    if not real_url:
+        return {"success": False, "error": "Unable to resolve track"}
     start_mpv_daemon()
-    final_title = title or "Track"
-    final_artist = artist or ""
-    if "spotify.com/track/" in url:
-        spot = resolve_spotify_url(url)
-        if spot and spot.get("query"):
-            res = search_tracks(spot["query"], limit=1)
-            if res:
-                url = res[0]["url"]
-                final_title = spot.get("title") or res[0]["title"]
-                final_artist = spot.get("artist") or res[0]["artist"]
-    record_history(final_title, final_artist, url, 0)
-    if is_youtube_url(url):
-        save_youtube_meta(url, final_title, final_artist)
-        save_now_playing(final_title, final_artist, url)
-        stream_youtube(url)
+    record_history(final_title, final_artist, real_url, 0)
+    if is_youtube_url(real_url):
+        save_youtube_meta(real_url, final_title, final_artist)
+        save_now_playing(final_title, final_artist, real_url)
+        stream_youtube(real_url)
         send_mpv_cmd(["loadfile", STREAM_FIFO, "append"])
         return {"success": True}
-    save_now_playing(final_title, final_artist, url)
-    send_mpv_cmd(["loadfile", url, "append"])
+    save_now_playing(final_title, final_artist, real_url)
+    send_mpv_cmd(["loadfile", real_url, "append"])
     return {"success": True}
 
 def stop_daemon():
