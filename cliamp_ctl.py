@@ -116,7 +116,7 @@ def record_history(title, artist, url, dur):
     except Exception:
         pass
 
-def parse_history(limit=30):
+def parse_history(limit=500):
     if not os.path.exists(HISTORY_PATH):
         return []
     try:
@@ -182,7 +182,7 @@ def import_playlist(url, custom_name=None):
             cmd = [
                 "yt-dlp",
                 "--flat-playlist",
-                "--max-downloads", "50",
+                "--max-downloads", "500",
                 "--print", "%(id)s\t%(title)s\t%(uploader)s\t%(duration_string)s",
                 "--",
                 url
@@ -798,7 +798,7 @@ if __name__ == "__main__":
         print(json.dumps(parse_history(lim)))
     elif action == "playlists":
         custom = parse_playlists()
-        result = [{"name": "Recently Played", "count": len(parse_history(100)), "system": True}]
+        result = [{"name": "Recently Played", "count": len(parse_history(500)), "system": True}]
         for pl in custom:
             result.append({"name": pl.get("name", "Untitled"), "count": len(pl.get("tracks", [])), "tracks": pl.get("tracks", [])})
         print(json.dumps(result))

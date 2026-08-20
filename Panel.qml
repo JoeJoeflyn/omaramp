@@ -362,7 +362,7 @@ Panel {
 
   Process {
     id: historyProc
-    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "history", "30"]
+    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "history", "200"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
