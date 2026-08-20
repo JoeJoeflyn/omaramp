@@ -48,8 +48,8 @@ function render(ctx, d) {
         if (sd < st && (1.0 - sd / st) > 0.4) lit = true
       }
       if (lit) {
-        var norm = pdist / Math.max(1, maxR)
-        ctx.fillStyle = norm < 0.3 ? "rgba(0,255,100,0.8)" : norm < 0.6 ? "rgba(255,200,0,0.7)" : "rgba(255,50,50,0.6)"
+        var norm = pdist / Math.max(1, r)
+        ctx.fillStyle = H.specColor(norm)
         ctx.fillRect(px, py, 2, 2)
       }
     }

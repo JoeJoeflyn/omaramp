@@ -27,20 +27,20 @@ function render(ctx, d) {
   var lCells = Math.floor(w * lLevel)
   for (var lc = 0; lc < lCells; lc++) {
     var n = lc / Math.max(1, w - 1)
-    ctx.fillStyle = n < 0.6 ? "#00ff66" : n < 0.85 ? "#ffaa00" : "#ff3333"
+    ctx.fillStyle = H.specColor(n)
     ctx.fillRect(lc, 2, 1, halfH - 4)
   }
   var lPeakCell = Math.floor(w * stPeak) - 1
-  if (lPeakCell >= 0 && lPeakCell < w) { ctx.fillStyle = "#fff"; ctx.fillRect(lPeakCell, 2, 1, halfH - 4) }
+  if (lPeakCell >= 0 && lPeakCell < w) { ctx.fillStyle = "#ffffff"; ctx.fillRect(lPeakCell, 2, 1, halfH - 4) }
   // R meter (bottom, grows right)
   var rCells = Math.floor(w * rLevel)
   for (var rc = 0; rc < rCells; rc++) {
     var n2 = rc / Math.max(1, w - 1)
-    ctx.fillStyle = n2 < 0.6 ? "#00ff66" : n2 < 0.85 ? "#ffaa00" : "#ff3333"
+    ctx.fillStyle = H.specColor(n2)
     ctx.fillRect(rc, halfH + 2, 1, halfH - 4)
   }
   var rPeakCell = Math.floor(w * stPeak) - 1
-  if (rPeakCell >= 0 && rPeakCell < w) { ctx.fillStyle = "#fff"; ctx.fillRect(rPeakCell, halfH + 2, 1, halfH - 4) }
+  if (rPeakCell >= 0 && rPeakCell < w) { ctx.fillStyle = "#ffffff"; ctx.fillRect(rPeakCell, halfH + 2, 1, halfH - 4) }
   // Separator + labels
   ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.lineWidth = 1
   ctx.beginPath(); ctx.moveTo(0, halfH); ctx.lineTo(w, halfH); ctx.stroke()

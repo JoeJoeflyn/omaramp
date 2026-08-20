@@ -16,13 +16,15 @@ function render(ctx, d) {
   for (var i = 0; i < count; i++) avg += (bands[i] || 0)
   avg /= count
   var noise = H.scatterHash(0, 0, w - 1, Math.floor(frame / 3)) * 0.15
-  buf[w - 1] = Math.max(0.03, avg + noise - 0.05)
+  buf[w - 1] = d.playing ? Math.max(0.02, avg + noise - 0.05) : Math.max(0.0, buf[w - 1] * 0.9 - 0.01)
 
-  // Render filled terrain
+  // Render filled terrain (green valleys, yellow slopes, red peaks)
   for (var x2 = 0; x2 < w; x2++) {
     var ty = h - 1 - Math.floor(buf[x2] * (h - 1))
-    var norm = (h - ty) / h
-    ctx.fillStyle = H.specColor(norm)
-    for (var y = ty; y < h; y++) ctx.fillRect(x2, y, 1, 1)
+    for (var y = ty; y < h; y++) {
+      var norm = (h - 1 - y) / h
+      ctx.fillStyle = H.specColor(norm)
+      ctx.fillRect(x2, y, 1, 1)
+    }
   }
 }

@@ -18,8 +18,7 @@ function render(ctx, d) {
       if (level >= rowTop) fill = 1.0
       else if (level > rowBottom) fill = (level - rowBottom) / (rowTop - rowBottom)
       if (fill > 0) {
-        var alpha = fill >= 0.75 ? 0.9 : fill >= 0.5 ? 0.6 : fill >= 0.25 ? 0.35 : 0.15
-        ctx.fillStyle = "rgba(0, 229, 255, " + alpha + ")"
+        ctx.fillStyle = H.specColor(rowBottom)
         ctx.fillRect(x, y, colW, 1)
       }
     }
