@@ -27,23 +27,14 @@ Row {
     onClicked: p.prevTrack()
   }
 
-  // Primary Play / Pause Action Button
-  Rectangle {
-    width: Style.space(30); height: Style.space(30); radius: width / 2
+  // Play / Pause
+  PanelActionButton {
+    iconText: p.isPlaying ? "\uf04c" : "\uf04b"
+    tooltipText: p.isPlaying ? "Pause" : "Play"
+    foreground: p.isPlaying ? Color.accent : p.foreground
+    hoverColor: Color.accent; fontFamily: p.fontFamily
     anchors.verticalCenter: parent.verticalCenter
-    color: playMouse.pressed ? Qt.darker(Color.accent, 1.2) : (playMouse.containsMouse ? Qt.lighter(Color.accent, 1.15) : Color.accent)
-
-    Text {
-      anchors.centerIn: parent
-      text: p.isPlaying ? "\uf04c" : "\uf04b"
-      color: "#000000"
-      font.family: p.fontFamily; font.pixelSize: Style.font.bodySmall; font.bold: true
-    }
-
-    MouseArea {
-      id: playMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-      onClicked: p.togglePlayback()
-    }
+    onClicked: p.togglePlayback()
   }
 
   // Next Track
