@@ -379,34 +379,50 @@ Item {
         height: Style.space(52)
         radius: Style.space(4)
         clip: true
-        color: Qt.rgba(p.dynamicAccent.r * 0.15, p.dynamicAccent.g * 0.10, p.dynamicAccent.b * 0.18, 1.0)
-        borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.65 + root.beatDropPulse * 0.35) : Qt.rgba(1, 1, 1, 0.15), 1)
+        // Base fill uses full accent color at visible saturation
+        color: Qt.rgba(
+          Math.max(0.08, p.dynamicAccent.r * 0.22),
+          Math.max(0.06, p.dynamicAccent.g * 0.15),
+          Math.max(0.10, p.dynamicAccent.b * 0.25),
+          1.0
+        )
+        borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.80) : Qt.rgba(1, 1, 1, 0.15), 1)
 
-        // 1. Full-bleed vibrant gradient wash — NOT subtle, actually visible
+        // 1. Horizontal color wash — vivid edges that you can actually SEE
         Rectangle {
           anchors.fill: parent; z: 0
           gradient: Gradient {
             orientation: Gradient.Horizontal
-            GradientStop { position: 0.0;  color: Qt.rgba(p.dynamicAccent.r * 0.9, p.dynamicAccent.g * 0.3, p.dynamicAccent.b * 0.8, p.isPlaying ? 0.65 : 0.15) }
-            GradientStop { position: 0.5;  color: Qt.rgba(p.dynamicAccent.r * 0.12, p.dynamicAccent.g * 0.10, p.dynamicAccent.b * 0.15, 0.90) }
-            GradientStop { position: 1.0;  color: Qt.rgba(p.dynamicAccent.b * 0.7, p.dynamicAccent.r * 0.5, p.dynamicAccent.g * 0.9, p.isPlaying ? 0.60 : 0.12) }
+            GradientStop { position: 0.0;  color: Qt.rgba(
+              Math.min(1.0, p.dynamicAccent.r + 0.15),
+              p.dynamicAccent.g * 0.35,
+              Math.min(1.0, p.dynamicAccent.b + 0.10),
+              p.isPlaying ? 0.75 : 0.20
+            )}
+            GradientStop { position: 0.45; color: Qt.rgba(0.06, 0.05, 0.10, 0.70) }
+            GradientStop { position: 1.0;  color: Qt.rgba(
+              Math.min(1.0, p.dynamicAccent.b + 0.10),
+              Math.min(1.0, p.dynamicAccent.r * 0.6 + 0.15),
+              Math.min(1.0, p.dynamicAccent.g + 0.10),
+              p.isPlaying ? 0.70 : 0.18
+            )}
           }
         }
 
-        // 2. Hot center neon bloom — big, bright, breathing with kicks
+        // 2. Central neon bloom — HOT, pulsing with bass
         Rectangle {
           anchors.centerIn: parent; z: 1
-          width: parent.width * 0.55; height: parent.height * 1.2
+          width: parent.width * 0.50; height: parent.height * 1.3
           radius: width / 2
-          color: p.dynamicAccent
-          opacity: p.isPlaying ? (0.40 + root.beatDropPulse * 0.35) : 0.05
+          color: Qt.lighter(p.dynamicAccent, 1.4)
+          opacity: p.isPlaying ? (0.50 + root.beatDropPulse * 0.40) : 0.06
         }
 
         // 3. Top edge highlight
         Rectangle {
           anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
           height: 1; z: 2
-          color: Qt.rgba(1, 1, 1, 0.30)
+          color: Qt.rgba(1, 1, 1, 0.35)
         }
 
         Canvas {
