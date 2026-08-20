@@ -39,19 +39,19 @@ function render(ctx, d) {
     return
   }
 
-  // Spawn grains — threshold 0.04 (vs cliamp 0.10) so quiet highs
-  // still seed the right edge occasionally; otherwise 24→10 resample
-  // leaves last 10-15% empty on this 22050Hz capture and sand looks left-only.
-  for (var b = 0; b < 10; b++) {
-    var level = _sandBands[b] || 0
-    if (level < 0.04) continue
-    if (rand01() > level * 0.85) continue
-    var centre = (b * 2 + 1) * cols / (2 * 10)
-    var spread = Math.max(1, Math.floor(cols / (10 * 2)))
-    var x = centre + Math.floor(rand01() * (2 * spread)) - spread
-    x = Math.max(0, Math.min(cols - 1, x))
-    var tier = b < 10 / 3 ? 3 : b < 2 * 10 / 3 ? 2 : 1
-    if (grid[x] === 0) grid[x] = tier
+  // Spawn grains — only while playing audio
+  if (d.playing) {
+    for (var b = 0; b < 10; b++) {
+      var level = _sandBands[b] || 0
+      if (level < 0.04) continue
+      if (rand01() > level * 0.85) continue
+      var centre = (b * 2 + 1) * cols / (2 * 10)
+      var spread = Math.max(1, Math.floor(cols / (10 * 2)))
+      var x = centre + Math.floor(rand01() * (2 * spread)) - spread
+      x = Math.max(0, Math.min(cols - 1, x))
+      var tier = b < 10 / 3 ? 3 : b < 2 * 10 / 3 ? 2 : 1
+      if (grid[x] === 0) grid[x] = tier
+    }
   }
 
   // Bass transient bump
@@ -127,7 +127,7 @@ function render(ctx, d) {
 }
 
 function renderGrid(ctx, grid, rows, cols) {
-  var colors = [null, "rgba(0,255,100,0.8)", "rgba(255,200,0,0.8)", "rgba(255,50,50,0.8)"]
+  var colors = [null, "rgba(85, 255, 85, 0.9)", "rgba(255, 255, 85, 0.9)", "rgba(255, 85, 85, 0.9)"]
   for (var y = 0; y < rows; y++) {
     for (var x = 0; x < cols; x++) {
       var g = grid[y * cols + x]

@@ -30,13 +30,15 @@ function render(ctx, d) {
     particles.push({ x: jx, y: y, vx: vxJ, vy: -vyJ, tier: tier, life: 0 })
   }
 
-  // Steady drizzle — spawn rate scales with overall loudness
-  var steady = bass * 0.85 + mid * 0.25 + high * 0.08
-  for (var i = 0; i < Math.floor(steady * 6); i++) spawn(jetX, h - 1, jetSpread, 1.5 + steady * 4.5)
-  // Transient kick on bass rising edge
-  if (delta > 0.06 && bass > 0.15) {
-    var burst = 40 + Math.floor(delta * 180)
-    for (var i2 = 0; i2 < burst; i2++) spawn(jetX, h - 1, jetSpread * 2, 4.5 + delta * 10.0 + bass * 4.0)
+  // Steady drizzle & burst kicks — only while playing
+  if (d.playing) {
+    var steady = bass * 0.85 + mid * 0.25 + high * 0.08
+    for (var i = 0; i < Math.floor(steady * 6); i++) spawn(jetX, h - 1, jetSpread, 1.5 + steady * 4.5)
+    // Transient kick on bass rising edge
+    if (delta > 0.06 && bass > 0.15) {
+      var burst = 40 + Math.floor(delta * 180)
+      for (var i2 = 0; i2 < burst; i2++) spawn(jetX, h - 1, jetSpread * 2, 4.5 + delta * 10.0 + bass * 4.0)
+    }
   }
 
   // Advance particles — same constants as cliamp (gravity 0.30, drag 0.992)
@@ -52,9 +54,9 @@ function render(ctx, d) {
     var ix = Math.floor(pt.x), iy = Math.floor(pt.y)
     if (iy >= h || ix < 0 || ix >= w || pt.life > 200) continue
     if (iy < 0) iy = 0
-    var colors = ["rgba(0,255,100,0.7)", "rgba(255,200,0,0.7)", "rgba(255,50,50,0.7)"]
+    var colors = ["rgba(85, 255, 85, 0.8)", "rgba(255, 255, 85, 0.8)", "rgba(255, 85, 85, 0.8)"]
     ctx.fillStyle = colors[Math.max(0, Math.min(2, pt.tier - 1))]
-    ctx.fillRect(ix, iy, S, S)
+    ctx.fillRect(ix, iy, 2, 2)
     live.push(pt)
   }
   s.geyserParticles = live
