@@ -55,10 +55,10 @@ Panel {
   property string loadingVid: ""
   property string selectedTab: "history"
   property string urlInputText: ""
-  property string visMode: "sine"
+  property string visMode: "siriwave"
   property bool visPickerOpen: false
   property bool eqPickerOpen: false
-  property var visModes: ["bars", "bars_dot", "bars_outline", "bricks", "columns", "classic_led", "peaks", "wave", "scope", "heartbeat", "sine", "siriwave", "scrubber_wave", "line_wave", "curve_wave", "retro", "scatter", "flame", "pulse", "matrix", "binary", "butterfly", "sakura", "firework", "bubbles", "rain", "terrain", "logo", "firefly", "geyser", "mosaic", "sand", "stereo", "ascii"]
+  property var visModes: ["bars", "bars_dot", "bars_outline", "bricks", "columns", "classic_led", "peaks", "wave", "scope", "heartbeat", "sine", "siriwave", "scrubber_wave", "retro", "scatter", "flame", "pulse", "matrix", "binary", "butterfly", "sakura", "firework", "bubbles", "rain", "terrain", "logo", "firefly", "geyser", "mosaic", "sand", "stereo", "ascii"]
 
   // Visualizer state
   property var visBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
