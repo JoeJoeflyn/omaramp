@@ -436,7 +436,7 @@ Panel {
     bar: root.bar
     open: root.opened
     centerOnBar: false
-    contentWidth: panel.fittedContentWidth(Style.space(380))
+    contentWidth: panel.fittedContentWidth(Style.space(400))
     contentHeight: panel.fittedContentHeight(mainColumn.implicitHeight + Style.space(16), Style.space(560))
 
     PanelKeyCatcher {
