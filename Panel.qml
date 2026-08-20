@@ -469,38 +469,90 @@ Panel {
           width: parent.width
           height: Style.space(200)
 
-          Text {
-            visible: playerComp.lyricsLines.length === 0
-            anchors.centerIn: parent
-            text: "No lyrics found"
-            color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.font.caption
-          }
+          BorderSurface {
+            anchors.fill: parent
+            radius: Style.cornerRadius
+            color: Qt.rgba(0.05, 0.05, 0.07, 0.85)
+            borderSpec: Border.controlSpec("normal", root.foreground, Color.accent)
 
-          Column {
-            anchors.centerIn: parent; width: parent.width - Style.space(16); spacing: Style.space(4)
+            Row {
+              id: lyricsHeader
+              anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+              anchors.margins: Style.space(8)
+              spacing: Style.space(6)
 
-            Text {
-              width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
-              textFormat: Text.PlainText
-              text: {
-                var i = playerComp.lyricsCurrentIdx
-                if (i < 0 || !playerComp.lyricsLines[i]) return "♪"
-                return playerComp.lyricsLines[i].text || "♪"
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "\uf130"
+                color: Color.accent; font.family: root.fontFamily; font.pixelSize: Style.font.caption
               }
-              color: Color.accent; font.family: root.fontFamily
-              font.pixelSize: Style.font.body; font.bold: true
+              Text {
+                width: parent.width - Style.space(40); anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: "Lyrics — " + (root.currentTrack || "No track")
+                color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.font.caption
+                font.bold: true; elide: Text.ElideRight
+              }
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "\uf00d"
+                color: closeLyricsMouse.containsMouse ? Color.accent : root.dim
+                font.family: root.fontFamily; font.pixelSize: Style.font.caption
+                MouseArea {
+                  id: closeLyricsMouse
+                  anchors.fill: parent; cursorShape: Qt.PointingHandCursor; hoverEnabled: true
+                  onClicked: playerComp.toggleLyrics()
+                }
+              }
             }
 
             Text {
-              width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
-              textFormat: Text.PlainText
-              text: {
-                var i = playerComp.lyricsCurrentIdx + 1
-                if (i < 0 || !playerComp.lyricsLines[i]) return ""
-                return playerComp.lyricsLines[i].text || ""
+              visible: playerComp.lyricsLines.length === 0
+              anchors.centerIn: parent
+              text: "No synced lyrics available"
+              color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.font.caption
+            }
+
+            Column {
+              visible: playerComp.lyricsLines.length > 0
+              anchors.centerIn: parent
+              width: parent.width - Style.space(24)
+              spacing: Style.space(8)
+
+              Text {
+                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+                text: {
+                  var i = playerComp.lyricsCurrentIdx - 1
+                  return (i >= 0 && playerComp.lyricsLines[i]) ? playerComp.lyricsLines[i].text : ""
+                }
+                color: Qt.rgba(1, 1, 1, 0.25); font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
               }
-              color: Qt.rgba(1, 1, 1, 0.3); font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
+
+              Text {
+                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+                text: {
+                  var i = playerComp.lyricsCurrentIdx
+                  if (i < 0 || !playerComp.lyricsLines[i]) return "♪ ♪ ♪"
+                  return playerComp.lyricsLines[i].text || "♪"
+                }
+                color: Color.accent; font.family: root.fontFamily
+                font.pixelSize: Style.font.body; font.bold: true
+              }
+
+              Text {
+                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+                text: {
+                  var i = playerComp.lyricsCurrentIdx + 1
+                  if (i < 0 || !playerComp.lyricsLines[i]) return ""
+                  return playerComp.lyricsLines[i].text || ""
+                }
+                color: Qt.rgba(1, 1, 1, 0.35); font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
             }
           }
         }

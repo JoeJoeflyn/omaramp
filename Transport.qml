@@ -59,7 +59,12 @@ Row {
     Text {
       anchors.verticalCenter: parent.verticalCenter
       text: p.volumePct === 0 ? "\uf026" : (p.volumePct < 50 ? "\uf027" : "\uf028")
-      color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
+      color: p.volumePct === 0 ? p.urgent : (volIconMouse.containsMouse ? Color.accent : p.dim)
+      font.family: p.fontFamily; font.pixelSize: Style.font.caption
+      MouseArea {
+        id: volIconMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+        onClicked: p.toggleMute()
+      }
     }
 
     Item {
