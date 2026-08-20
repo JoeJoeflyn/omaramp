@@ -55,7 +55,7 @@ Panel {
   property string loadingVid: ""
   property string selectedTab: "history"
   property string urlInputText: ""
-  property string visMode: "siriwave"
+  property string visMode: "sine"
   property bool visPickerOpen: false
   property bool eqPickerOpen: false
   property var visModes: ["bars", "bars_dot", "bars_outline", "bricks", "columns", "classic_led", "peaks", "wave", "scope", "heartbeat", "sine", "siriwave", "scrubber_wave", "retro", "scatter", "flame", "pulse", "matrix", "binary", "butterfly", "sakura", "firework", "bubbles", "rain", "terrain", "logo", "firefly", "geyser", "mosaic", "sand", "stereo", "ascii"]
@@ -74,20 +74,20 @@ Panel {
     openedFromHotkey = false
     setCenterHoverRevealSuppressed(false)
     root.controller.show()
-    root.refresh()
-    loadHistory()
-    loadPlaylists()
-    runCmd(["start_spectrum"])
+    Qt.callLater(function() {
+      root.refresh()
+      loadHistory()
+      runCmd(["start_spectrum"])
+    })
   }
 
   function openFromHotkey() {
     openedFromHotkey = true
     root.controller.show()
-    root.refresh()
-    loadHistory()
-    loadPlaylists()
-    runCmd(["start_spectrum"])
     Qt.callLater(function() {
+      root.refresh()
+      loadHistory()
+      runCmd(["start_spectrum"])
       if (root.opened) setCenterHoverRevealSuppressed(true)
     })
   }
