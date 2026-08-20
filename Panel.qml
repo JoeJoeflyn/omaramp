@@ -453,7 +453,7 @@ Panel {
   }
 
   readonly property var _xdg: Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000"
-  readonly property string spectrumPath: "/dev/shm/omaramp_spectrum_" + _xdg.split("/").pop() + ".json"
+  readonly property string spectrumPath: _xdg + "/omaramp/spectrum.json"
 
   FileView {
     id: specFile

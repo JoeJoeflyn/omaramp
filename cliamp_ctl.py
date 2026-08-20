@@ -14,17 +14,34 @@ try:
 except ImportError:
     tomllib = None
 
-SOCK_PATH = f"/tmp/omaramp_mpv_{os.getuid()}.sock"
-STREAM_FIFO = f"/tmp/omaramp_stream_{os.getuid()}"
+RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR")
+if RUNTIME_DIR and os.path.isdir(RUNTIME_DIR):
+    RUN_DIR = os.path.join(RUNTIME_DIR, "omaramp")
+else:
+    RUN_DIR = os.path.expanduser("~/.cache/omaramp/run")
+
+os.makedirs(RUN_DIR, mode=0o700, exist_ok=True)
+try:
+    os.chmod(RUN_DIR, 0o700)
+except Exception:
+    pass
+
+SOCK_PATH = os.path.join(RUN_DIR, "mpv.sock")
+STREAM_FIFO = os.path.join(RUN_DIR, "stream.fifo")
 CACHE_DIR = os.path.expanduser("~/.cache/omaramp")
 AUDIO_CACHE_DIR = os.path.join(CACHE_DIR, "audio")
 HISTORY_PATH = os.path.expanduser("~/.config/cliamp/history.toml")
 NOW_PLAYING_PATH = os.path.join(CACHE_DIR, "now_playing.json")
 QUEUE_PATH = os.path.join(CACHE_DIR, "queue.json")
 
-os.makedirs(AUDIO_CACHE_DIR, exist_ok=True)
-os.makedirs(os.path.expanduser("~/.config/cliamp"), exist_ok=True)
-os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(AUDIO_CACHE_DIR, mode=0o700, exist_ok=True)
+os.makedirs(os.path.expanduser("~/.config/cliamp"), mode=0o700, exist_ok=True)
+os.makedirs(CACHE_DIR, mode=0o700, exist_ok=True)
+try:
+    os.chmod(CACHE_DIR, 0o700)
+    os.chmod(AUDIO_CACHE_DIR, 0o700)
+except Exception:
+    pass
 
 def read_queue():
     if os.path.exists(QUEUE_PATH):
@@ -750,24 +767,42 @@ def save_youtube_meta(url, title, artist):
                 pass
 
 def stream_youtube(url):
-    """Stream YouTube audio to mpv via a FIFO pipe — no disk download."""
+    """Stream YouTube audio to mpv via a secure private FIFO pipe — no disk download."""
     # Kill any previous yt-dlp stream process
     try:
-        subprocess.run(["pkill", "-f", "yt-dlp.*omaramp_stream"], capture_output=True)
+        subprocess.run(["pkill", "-f", "yt-dlp.*stream\\.fifo"], capture_output=True)
     except Exception:
         pass
-    # Recreate the FIFO
+
+    # Ensure runtime directory exists with strict 0o700 permissions
+    os.makedirs(RUN_DIR, mode=0o700, exist_ok=True)
     try:
-        os.remove(STREAM_FIFO)
+        os.chmod(RUN_DIR, 0o700)
     except Exception:
         pass
+
+    # Securely remove old FIFO if present (verify ownership and prevent symlink hijacking)
+    if os.path.lexists(STREAM_FIFO):
+        try:
+            if os.path.islink(STREAM_FIFO) or not os.path.exists(STREAM_FIFO):
+                os.unlink(STREAM_FIFO)
+            else:
+                stat = os.stat(STREAM_FIFO)
+                if stat.st_uid != os.getuid():
+                    raise PermissionError(f"FIFO {STREAM_FIFO} is not owned by current user")
+                os.remove(STREAM_FIFO)
+        except Exception as e:
+            if not isinstance(e, FileNotFoundError):
+                raise
+
+    # Create the private FIFO with owner-only 0o600 permissions
+    os.mkfifo(STREAM_FIFO, 0o600)
     try:
-        os.mkfifo(STREAM_FIFO)
+        os.chmod(STREAM_FIFO, 0o600)
     except Exception:
         pass
-    # Open the FIFO read end ourselves so the writer (yt-dlp) never blocks
-    # even if mpv is slow to open the read end. This prevents the deadlock
-    # where open(FIFO, "wb") blocks before Popen can fork.
+
+    # Open the FIFO read end non-blocking so the writer (yt-dlp) never blocks
     read_fd = os.open(STREAM_FIFO, os.O_RDONLY | os.O_NONBLOCK)
     write_fd = os.open(STREAM_FIFO, os.O_WRONLY)
     os.close(read_fd)  # Close our dummy reader — mpv will take over

@@ -3,7 +3,19 @@
 import os, sys, time, math, subprocess, signal
 import numpy as np
 
-OUT_FILE = f"/dev/shm/omaramp_spectrum_{os.getuid()}.json"
+RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR")
+if RUNTIME_DIR and os.path.isdir(RUNTIME_DIR):
+    RUN_DIR = os.path.join(RUNTIME_DIR, "omaramp")
+else:
+    RUN_DIR = os.path.expanduser("~/.cache/omaramp/run")
+
+os.makedirs(RUN_DIR, mode=0o700, exist_ok=True)
+try:
+    os.chmod(RUN_DIR, 0o700)
+except Exception:
+    pass
+
+OUT_FILE = os.path.join(RUN_DIR, "spectrum.json")
 RATE = 44100
 CHUNK = 2048  # 2048-sample FFT — 44100/2048=21.5Hz/bin, Nyquist 22050 covers 12kHz+
 NUM_BANDS = 24
@@ -113,12 +125,21 @@ def run():
             gain = min(35.0, 0.75 / peak) if peak > 0.005 else 1.0
             wave = [round(max(-1.0, min(1.0, float(x * gain))), 4) for x in wave_raw]
 
-            # Fast atomic write to /dev/shm
+            # Fast atomic write with 0o600 permissions
             tmp_out = OUT_FILE + ".tmp"
-            with open(tmp_out, "w", encoding="utf-8") as f:
+            fd = os.open(tmp_out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with open(fd, "w", encoding="utf-8") as f:
                 f.write('{"bands":[' + ",".join(str(b) for b in cur_bands) +
                         '],"wave":[' + ",".join(str(w) for w in wave) + ']}')
+            try:
+                os.chmod(tmp_out, 0o600)
+            except Exception:
+                pass
             os.replace(tmp_out, OUT_FILE)
+            try:
+                os.chmod(OUT_FILE, 0o600)
+            except Exception:
+                pass
 
         except Exception:
             time.sleep(0.05)
