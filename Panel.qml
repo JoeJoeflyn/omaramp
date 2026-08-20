@@ -55,7 +55,7 @@ Panel {
   property string loadingVid: ""
   property string selectedTab: "history"
   property string urlInputText: ""
-  property string visMode: "soundcloud_wave"
+  property string visMode: "dj_spectral"
   property bool visPickerOpen: false
   property bool eqPickerOpen: false
   property var visModes: ["bars", "bars_dot", "bars_outline", "bricks", "columns", "classic_led", "peaks", "wave", "scope", "heartbeat", "sine", "siriwave", "scrubber_wave", "soundcloud_wave", "dj_spectral", "voice_pill", "retro", "scatter", "flame", "pulse", "matrix", "binary", "butterfly", "sakura", "firework", "bubbles", "rain", "terrain", "logo", "firefly", "geyser", "mosaic", "sand", "stereo", "ascii"]
