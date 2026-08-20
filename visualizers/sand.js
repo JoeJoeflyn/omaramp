@@ -1,176 +1,150 @@
-// Sand — vis_sand.go: falling-sand cellular automaton
-// cliamp dot grid is 20×148 (Rows*4 × PanelWidth*2); canvas is ~21×190
-// (h/2 × w/2) — nearly identical, so keep physics constants 1:1.
+// Sand — falling-sand cellular automaton with dynamic audio streams & dune physics
 .pragma library
 .import "helpers.js" as H
 
 function render(ctx, d) {
-  var bands = d.bands, h = d.height, w = d.width, count = d.count, S = d.S, frame = d.frame
-  // 2px rows → 2×2 grains (visible), fall in 21 frames
-  var rows = Math.floor(h / 2), cols = Math.floor(w / 2)
+  var bands = d.bands || []
+  var h = d.height, w = d.width, frame = d.frame || 0
+  var rows = Math.max(12, Math.floor(h / 2))
+  var cols = Math.max(20, Math.floor(w / 2))
   var s = d.state
-  if (s.sandRng === undefined) { s.sandRng = 0x5A4D5A4D; s.sandPrevBass = 0; s.sandParticles = []; s.sandExplosionTTL = 0 }
+
+  if (s.sandRng === undefined) {
+    s.sandRng = 0x5A4D5A4D
+    s.sandPrevBass = 0
+    s.sandGrid = new Array(rows * cols).fill(0)
+    s.sandRows = rows
+    s.sandCols = cols
+  }
+
   if (!s.sandGrid || s.sandRows !== rows || s.sandCols !== cols) {
     s.sandGrid = new Array(rows * cols).fill(0)
-    s.sandRows = rows; s.sandCols = cols
+    s.sandRows = rows
+    s.sandCols = cols
   }
+
   var grid = s.sandGrid
   var rngVal = s.sandRng
   function rand01() {
     rngVal = (rngVal * 1664525 + 1013904223) & 0xFFFFFFFF
-    return ((rngVal >> 16) % 1000) / 1000.0
+    return ((rngVal >>> 16) % 1000) / 1000.0
   }
 
-  // Match cliamp DefaultSpectrumBands=10: resample 24→10 so spawn
-  // distribution and tier mapping equal vis_sand.go. Without this,
-  // 24 narrow bands leave the rightmost 16% empty when highs are quiet.
-  var _sandBands = H.resampleBandsLinear(bands, 10)
-  var bass = H.bandAvg(_sandBands, 0, Math.max(1, Math.floor(10 / 3)))
-  var delta = bass - s.sandPrevBass
+  var numBands = Math.min(16, bands.length || 10)
+  var resampled = H.resampleBandsLinear(bands, numBands)
+  var bass = H.bandAvg(resampled, 0, Math.max(1, Math.floor(numBands / 3)))
+  var delta = bass - (s.sandPrevBass || 0)
   s.sandPrevBass = bass
 
-  // EXPLOSION PHASE: suspend normal sim, animate ballistic particles
-  if (s.sandExplosionTTL > 0 || s.sandParticles.length > 0) {
-    tickExplosion(grid, rows, cols, s.sandParticles)
-    s.sandExplosionTTL = Math.max(0, s.sandExplosionTTL - 1)
-    if (s.sandParticles.length === 0) s.sandExplosionTTL = 0
-    renderGrid(ctx, grid, rows, cols)
-    s.sandRng = rngVal
-    return
-  }
-
-  // Spawn grains — only while playing audio
+  // 1. Spawn Grains — Pour continuous sand streams from top based on frequency energy
   if (d.playing) {
-    for (var b = 0; b < 10; b++) {
-      var level = _sandBands[b] || 0
-      if (level < 0.04) continue
-      if (rand01() > level * 0.85) continue
-      var centre = (b * 2 + 1) * cols / (2 * 10)
-      var spread = Math.max(1, Math.floor(cols / (10 * 2)))
-      var x = centre + Math.floor(rand01() * (2 * spread)) - spread
-      x = Math.max(0, Math.min(cols - 1, x))
-      var tier = b < 10 / 3 ? 3 : b < 2 * 10 / 3 ? 2 : 1
-      if (grid[x] === 0) grid[x] = tier
-    }
-  }
+    for (var b = 0; b < numBands; b++) {
+      var lvl = resampled[b] || 0
+      if (lvl < 0.05) continue
+      var spawnCount = Math.floor(lvl * 3.2)
+      if (rand01() < (lvl * 3.2 - spawnCount)) spawnCount++
 
-  // Bass transient bump
-  if (delta > 0.06 && bass > 0.15) {
-    var fill = 0
-    for (var gi = 0; gi < grid.length; gi++) if (grid[gi] !== 0) fill++
-    if (fill / grid.length > 0.30) {
-      startExplosion(grid, rows, cols, s.sandParticles, rand01)
-      s.sandExplosionTTL = 80
-      renderGrid(ctx, grid, rows, cols)
-      s.sandRng = rngVal
-      return
-    }
-    var strength = Math.min(1.4, delta * 3.5 + bass * 0.8)
-    for (var y = 0; y < rows; y++) {
-      var df = y / Math.max(1, rows - 1)
-      var liftProb = Math.min(0.95, strength * (0.30 + 0.70 * df))
-      var liftMax = 2 + Math.floor(strength * 7.0 * (0.4 + 0.6 * df))
-      var jitterR = 1 + Math.floor(strength * 5.0)
-      for (var x2 = 0; x2 < cols; x2++) {
-        var g = grid[y * cols + x2]
-        if (g === 0 || rand01() > liftProb) continue
-        var lift = 1 + Math.floor(rand01() * liftMax)
-        var jit = Math.floor(rand01() * (2 * jitterR + 1)) - jitterR
-        var ny = Math.max(0, y - lift), nx = Math.max(0, Math.min(cols - 1, x2 + jit))
-        if (grid[ny * cols + nx] === 0) { grid[ny * cols + nx] = g; grid[y * cols + x2] = 0 }
+      var centreX = Math.floor((b + 0.5) * (cols / numBands))
+      var spread = Math.max(1, Math.floor(cols / (numBands * 2.5)))
+
+      for (var sc = 0; sc < spawnCount; sc++) {
+        var sx = centreX + Math.floor(rand01() * (2 * spread + 1)) - spread
+        if (sx >= 0 && sx < cols) {
+          var tier = b < numBands / 3 ? 3 : (b < (2 * numBands) / 3 ? 2 : 1)
+          if (grid[sx] === 0) grid[sx] = tier
+          else if (grid[cols + sx] === 0) grid[cols + sx] = tier
+        }
       }
     }
   }
 
-  // Sustained rumble
-  if (bass > 0.30) {
-    var rumble = Math.min(0.6, (bass - 0.30) * 1.8)
-    var minY = Math.floor(rows / 2)
-    for (var y2 = minY; y2 < rows; y2++) {
-      var df2 = (y2 - minY) / Math.max(1, rows - 1 - minY)
-      var prob = rumble * (0.15 + 0.55 * df2)
-      for (var x3 = 0; x3 < cols; x3++) {
-        var g2 = grid[y2 * cols + x3]
-        if (g2 === 0 || rand01() > prob) continue
-        var lift2 = 1 + Math.floor(rand01() * 2.0)
-        var jit2 = Math.floor(rand01() * 5) - 2
-        var ny2 = Math.max(0, y2 - lift2), nx2 = Math.max(0, Math.min(cols - 1, x3 + jit2))
-        if (grid[ny2 * cols + nx2] === 0) { grid[ny2 * cols + nx2] = g2; grid[y2 * cols + x3] = 0 }
+  // 2. Bass Kick / Beat Drop Eruption (vibrate and scatter dunes upward)
+  var isBeatDrop = (d.beatDrop && d.beatDrop > 0.4) || (delta > 0.08 && bass > 0.20)
+  if (isBeatDrop) {
+    var kickPower = Math.min(1.0, (delta * 4.0) + (d.beatDrop || 0) * 0.5)
+    var liftRows = 1 + Math.floor(kickPower * 5)
+    for (var yk = 2; yk < rows; yk++) {
+      var depthFactor = yk / rows
+      var popChance = kickPower * (0.25 + 0.65 * depthFactor)
+      for (var xk = 0; xk < cols; xk++) {
+        var gVal = grid[yk * cols + xk]
+        if (gVal === 0) continue
+        if (rand01() < popChance) {
+          var popY = Math.max(0, yk - Math.floor(1 + rand01() * liftRows))
+          var popX = Math.max(0, Math.min(cols - 1, xk + Math.floor(rand01() * 5) - 2))
+          if (grid[popY * cols + popX] === 0) {
+            grid[popY * cols + popX] = gVal
+            grid[yk * cols + xk] = 0
+          }
+        }
       }
     }
   }
 
-  // Falling pass (bottom-up, alternating L/R for natural pile slopes)
-  for (var y3 = rows - 2; y3 >= 0; y3--) {
-    var leftFirst = (frame % 2) === 0
-    for (var xi = leftFirst ? 0 : cols - 1; leftFirst ? xi < cols : xi >= 0; xi += leftFirst ? 1 : -1) {
-      var g3 = grid[y3 * cols + xi]
-      if (g3 === 0) continue
-      if (grid[(y3 + 1) * cols + xi] === 0) { grid[(y3 + 1) * cols + xi] = g3; grid[y3 * cols + xi] = 0; continue }
-      var d1 = rand01() < 0.5 ? -1 : 1, d2 = -d1
-      for (var dx = 0; dx < 2; dx++) {
-        var ddx = dx === 0 ? d1 : d2
-        var nx3 = xi + ddx
-        if (nx3 < 0 || nx3 >= cols) continue
-        if (grid[(y3 + 1) * cols + nx3] === 0) { grid[(y3 + 1) * cols + nx3] = g3; grid[y3 * cols + xi] = 0; break }
+  // 3. Falling Sand Simulation (Cellular Automaton Physics)
+  var leftToRight = (frame % 2) === 0
+  for (var y = rows - 2; y >= 0; y--) {
+    var startX = leftToRight ? 0 : cols - 1
+    var endX = leftToRight ? cols : -1
+    var stepX = leftToRight ? 1 : -1
+
+    for (var x = startX; x !== endX; x += stepX) {
+      var grain = grid[y * cols + x]
+      if (grain === 0) continue
+
+      var below = (y + 1) * cols + x
+      // 1. Direct fall straight down
+      if (grid[below] === 0) {
+        grid[below] = grain
+        grid[y * cols + x] = 0
+        continue
+      }
+
+      // 2. Slide diagonally down-left or down-right
+      var dirA = rand01() < 0.5 ? -1 : 1
+      var dirB = -dirA
+
+      var nxA = x + dirA
+      if (nxA >= 0 && nxA < cols && grid[(y + 1) * cols + nxA] === 0) {
+        grid[(y + 1) * cols + nxA] = grain
+        grid[y * cols + x] = 0
+      } else {
+        var nxB = x + dirB
+        if (nxB >= 0 && nxB < cols && grid[(y + 1) * cols + nxB] === 0) {
+          grid[(y + 1) * cols + nxB] = grain
+          grid[y * cols + x] = 0
+        }
       }
     }
   }
 
-  // Floor drain
-  for (var x4 = 0; x4 < cols; x4++) {
-    if (grid[(rows - 1) * cols + x4] !== 0 && rand01() < 0.04) grid[(rows - 1) * cols + x4] = 0
+  // 4. Floor Drainage
+  var drainRate = d.playing ? 0.05 : 0.15
+  for (var xd = 0; xd < cols; xd++) {
+    var btmIdx = (rows - 1) * cols + xd
+    if (grid[btmIdx] !== 0 && rand01() < drainRate) {
+      grid[btmIdx] = 0
+    }
   }
 
-  renderGrid(ctx, grid, rows, cols)
+  // 5. Render Sand Grains with Dynamic Glowing Palette
+  var accent = d.accent || Qt.rgba(0.27, 0.33, 0.59, 1.0)
+  var col1 = Qt.rgba(accent.r, accent.g, accent.b, 0.75)
+  var col2 = Qt.rgba(Math.min(1.0, accent.r * 1.2 + 0.1), Math.min(1.0, accent.g * 1.1 + 0.1), Math.min(1.0, accent.b * 1.2 + 0.1), 0.9)
+  var col3 = Qt.rgba(1.0, 0.82, 0.38, 0.95)
+
+  for (var ry = 0; ry < rows; ry++) {
+    for (var rx = 0; rx < cols; rx++) {
+      var gTier = grid[ry * cols + rx]
+      if (gTier === 0) continue
+
+      if (gTier === 1) ctx.fillStyle = col1
+      else if (gTier === 2) ctx.fillStyle = col2
+      else ctx.fillStyle = col3
+
+      ctx.fillRect(rx * 2, ry * 2, 2, 2)
+    }
+  }
+
   s.sandRng = rngVal
-}
-
-function renderGrid(ctx, grid, rows, cols) {
-  var colors = [null, "rgba(85, 255, 85, 0.9)", "rgba(255, 255, 85, 0.9)", "rgba(255, 85, 85, 0.9)"]
-  for (var y = 0; y < rows; y++) {
-    for (var x = 0; x < cols; x++) {
-      var g = grid[y * cols + x]
-      if (g === 0) continue
-      ctx.fillStyle = colors[g]
-      ctx.fillRect(x * 2, y * 2, 2, 2)
-    }
-  }
-}
-
-function startExplosion(grid, rows, cols, particles, rand01) {
-  particles.length = 0
-  for (var y = 0; y < rows; y++) {
-    var df = y / Math.max(1, rows - 1)
-    for (var x = 0; x < cols; x++) {
-      var g = grid[y * cols + x]
-      if (g === 0) continue
-      grid[y * cols + x] = 0
-      particles.push({
-        x: x, y: y,
-        vx: (rand01() - 0.5) * 8.0,
-        vy: -(2.0 + rand01() * 5.0 + df * 2.0),
-        tier: g
-      })
-    }
-  }
-}
-
-function tickExplosion(grid, rows, cols, particles) {
-  var gravity = 0.50, drag = 0.985
-  for (var i = 0; i < grid.length; i++) grid[i] = 0
-  var live = []
-  for (var p = 0; p < particles.length; p++) {
-    var pt = particles[p]
-    pt.vy += gravity
-    pt.vx *= drag
-    pt.x += pt.vx
-    pt.y += pt.vy
-    var ix = Math.floor(pt.x), iy = Math.floor(pt.y)
-    if (iy < 0 || iy >= rows || ix < 0 || ix >= cols) continue
-    grid[iy * cols + ix] = pt.tier
-    live.push(pt)
-  }
-  particles.length = 0
-  for (var i2 = 0; i2 < live.length; i2++) particles.push(live[i2])
 }
