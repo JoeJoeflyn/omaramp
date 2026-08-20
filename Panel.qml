@@ -55,7 +55,7 @@ Panel {
   property string loadingVid: ""
   property string selectedTab: "history"
   property string urlInputText: ""
-  property string visMode: "bars"
+  property string visMode: "sand"
   property bool visPickerOpen: false
   property bool eqPickerOpen: false
   property var visModes: ["bars", "bars_dot", "bars_outline", "bricks", "columns", "classic_led", "peaks", "wave", "scope", "heartbeat", "retro", "scatter", "flame", "pulse", "matrix", "binary", "butterfly", "sakura", "firework", "bubbles", "rain", "terrain", "logo", "firefly", "geyser", "mosaic", "sand", "stereo", "ascii"]
@@ -443,6 +443,17 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       blocked: trackList.urlInput.activeFocus
+
+      Component.onCompleted: {
+        if (keyCatcher.parent && keyCatcher.parent.parent) {
+          var card = keyCatcher.parent.parent
+          card.x = Qt.binding(function() {
+            var sw = panel.screen ? panel.screen.width : (panel.anchorItem && panel.anchorItem.Window.window ? panel.anchorItem.Window.window.width : 1920)
+            return sw - panel.contentWidth - panel.margin
+          })
+        }
+      }
+
       onCloseRequested: {
         if (root.eqPickerOpen) root.eqPickerOpen = false
         else if (root.visPickerOpen) root.visPickerOpen = false

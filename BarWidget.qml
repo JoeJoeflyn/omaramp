@@ -6,21 +6,12 @@ BarWidget {
   id: root
   moduleName: "omaramp"
 
-  Item {
-    id: rightAnchor
-    parent: root.bar ? root.bar.contentItem : root
-    anchors.right: parent ? parent.right : undefined
-    anchors.top: parent ? parent.top : undefined
-    width: Style.space(24)
-    height: root.height
-  }
-
   function injectPanel() {
     var target = panelLoader.item
     if (!target) return
     if ("bar" in target) target.bar = root.bar
     if ("settings" in target) target.settings = root.settings
-    if ("anchorItem" in target) target.anchorItem = rightAnchor
+    if ("anchorItem" in target) target.anchorItem = button
     if ("hostWidget" in target) target.hostWidget = root
   }
 
