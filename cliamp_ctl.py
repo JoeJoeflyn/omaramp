@@ -235,7 +235,8 @@ def get_status():
             artist = p[0].strip()
             track = p[1].strip()
 
-        vol = int(vol_res.get("data") or 80) if vol_res else 80
+        vol_data = vol_res.get("data") if vol_res else None
+        vol = int(vol_data) if vol_data is not None else 80
 
         if state == "playing" and cur_s > 0 and int(cur_s) % 10 == 0:
             np = read_now_playing()
