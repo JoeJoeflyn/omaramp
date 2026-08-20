@@ -34,6 +34,7 @@ import "visualizers/stereo.js" as VisStereo
 import "visualizers/ascii.js" as VisAscii
 import "visualizers/sine.js" as VisSine
 import "visualizers/siriwave.js" as VisSiriWave
+import "visualizers/sound_wave.js" as VisSoundWave
 
 // HUD header + visualizer canvas + seek bar
 Item {
