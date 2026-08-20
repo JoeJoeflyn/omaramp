@@ -1,4 +1,4 @@
-// Sine — Pure Oscilloscope Harmonic Sine Wave (Clean, high-precision mathematical generator)
+// Sine — Physical Acoustic Standing Wave (Vibrating String / Harmonic Resonance)
 .pragma library
 .import "helpers.js" as H
 
@@ -8,7 +8,6 @@ function render(ctx, d) {
   var isPlaying = d.playing
   var midY = h / 2.0
 
-  // 1. Audio Energy
   var bass = H.bandAvg(bands, 0, 4)
   var mids = H.bandAvg(bands, 4, 12)
   var highs = H.bandAvg(bands, 12, 24)
@@ -41,70 +40,80 @@ function render(ctx, d) {
     }
   }
 
-  // Safe amplitude ceiling (prevents all vertical cropping)
-  var maxSafe = h * 0.36
-  var speed = 0.04 + totalEnergy * 0.04
-  var t = frame * speed
+  var maxSafe = h * 0.38
+  var t = frame * 0.08
 
-  // Edge windowing function (smooth taper to ends)
-  function edgeWindow(x) {
-    return Math.sin((x / w) * Math.PI)
-  }
+  // Standing Wave Harmonic Series: y(x,t) = sum( A_n * sin(n * pi * x / w) * cos(omega_n * t) )
+  // This physically vibrates and resonates vertically in place like a real acoustic string/membrane!
+  var harmonics = [
+    { n: 1, omega: 1.0, amp: Math.min(maxSafe, (h * 0.06) + bass * (h * 0.26) + beatDrop * (h * 0.08)) },
+    { n: 2, omega: 1.8, amp: Math.min(maxSafe * 0.75, (h * 0.04) + mids * (h * 0.20)) },
+    { n: 3, omega: 2.7, amp: Math.min(maxSafe * 0.55, (h * 0.03) + highs * (h * 0.16)) },
+    { n: 4, omega: 3.9, amp: Math.min(maxSafe * 0.35, (h * 0.02) + highs * (h * 0.10)) }
+  ]
 
-  // 2. Pure Dual-Harmonic Sine Wave (Distinct Oscilloscope Style)
-  var fundamentalAmp = Math.min(maxSafe, (h * 0.08) + bass * (h * 0.26) + beatDrop * (h * 0.08))
-  var harmonicAmp = Math.min(maxSafe * 0.6, (h * 0.04) + mids * (h * 0.18))
-
-  // Soft Ambient Glow Underfill (Pure accent tone)
+  // 1. Draw Phosphor Ambient Glow Underfill
   ctx.beginPath()
   ctx.moveTo(0, midY)
   for (var x = 0; x <= w; x += 2) {
-    var wF = edgeWindow(x)
-    var rad = (x / w) * (2.0 * Math.PI) + t
-    var yVal = midY - Math.sin(rad) * fundamentalAmp * wF
-    ctx.lineTo(x, yVal)
+    var xNorm = x / w
+    var yDisp = 0
+    for (var k = 0; k < harmonics.length; k++) {
+      var hItem = harmonics[k]
+      yDisp += hItem.amp * Math.sin(hItem.n * Math.PI * xNorm) * Math.cos(hItem.omega * t)
+    }
+    ctx.lineTo(x, midY - yDisp)
   }
   ctx.lineTo(w, midY)
   ctx.closePath()
-  ctx.fillStyle = "rgba(" + ar + "," + ag + "," + ab + ", 0.10)"
+  ctx.fillStyle = "rgba(" + ar + "," + ag + "," + ab + ", 0.12)"
   ctx.fill()
 
-  // Secondary Harmonic Trace (Sub-octave phosphor ghost)
+  // 2. Secondary Harmonic String (Upper Octave Vibration)
   ctx.lineWidth = 1.2
-  ctx.strokeStyle = "rgba(" + ar + "," + ag + "," + ab + ", 0.40)"
+  ctx.strokeStyle = "rgba(" + ar + "," + ag + "," + ab + ", 0.45)"
   ctx.beginPath()
   for (var x2 = 0; x2 <= w; x2 += 2) {
-    var wF2 = edgeWindow(x2)
-    var rad2 = (x2 / w) * (4.0 * Math.PI) - (t * 1.4)
-    var yVal2 = midY - Math.sin(rad2) * harmonicAmp * wF2
-    if (x2 === 0) ctx.moveTo(x2, yVal2)
-    else ctx.lineTo(x2, yVal2)
+    var xN2 = x2 / w
+    var y2 = harmonics[1].amp * Math.sin(2.0 * Math.PI * xN2) * Math.cos(1.8 * t) +
+             harmonics[2].amp * Math.sin(3.0 * Math.PI * xN2) * Math.cos(2.7 * t)
+    var yPos2 = midY - y2
+    if (x2 === 0) ctx.moveTo(x2, yPos2)
+    else ctx.lineTo(x2, yPos2)
   }
   ctx.stroke()
 
-  // Primary Crisp Sine Trace (Pure mathematical curve in vivid accent + white core)
+  // 3. Primary Resonating String (Composite Standing Wave)
   ctx.lineWidth = 2.2
   ctx.strokeStyle = "rgba(" + ar + "," + ag + "," + ab + ", 0.95)"
   ctx.beginPath()
   for (var x3 = 0; x3 <= w; x3 += 2) {
-    var wF3 = edgeWindow(x3)
-    var rad3 = (x3 / w) * (2.0 * Math.PI) + t
-    var yVal3 = midY - Math.sin(rad3) * fundamentalAmp * wF3
-    if (x3 === 0) ctx.moveTo(x3, yVal3)
-    else ctx.lineTo(x3, yVal3)
+    var xN3 = x3 / w
+    var y3 = 0
+    for (var m = 0; m < harmonics.length; m++) {
+      var hm = harmonics[m]
+      y3 += hm.amp * Math.sin(hm.n * Math.PI * xN3) * Math.cos(hm.omega * t)
+    }
+    var yPos3 = midY - y3
+    if (x3 === 0) ctx.moveTo(x3, yPos3)
+    else ctx.lineTo(x3, yPos3)
   }
   ctx.stroke()
 
-  // Glowing Luminous Core Highlight
+  // 4. Glowing White Centerline Trace
   ctx.lineWidth = 1.0
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.85)"
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.90)"
   ctx.beginPath()
   for (var x4 = 0; x4 <= w; x4 += 2) {
-    var wF4 = edgeWindow(x4)
-    var rad4 = (x4 / w) * (2.0 * Math.PI) + t
-    var yVal4 = midY - Math.sin(rad4) * fundamentalAmp * wF4
-    if (x4 === 0) ctx.moveTo(x4, yVal4)
-    else ctx.lineTo(x4, yVal4)
+    var xN4 = x4 / w
+    var y4 = 0
+    for (var p = 0; p < harmonics.length; p++) {
+      var hp = harmonics[p]
+      y4 += hp.amp * Math.sin(hp.n * Math.PI * xN4) * Math.cos(hp.omega * t)
+    }
+    var yPos4 = midY - y4
+    if (x4 === 0) ctx.moveTo(x4, yPos4)
+    else ctx.lineTo(x4, yPos4)
   }
   ctx.stroke()
 }
