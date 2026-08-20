@@ -8,53 +8,75 @@ Row {
   property var p  // Panel root
 
   width: parent ? parent.width : 0
-  spacing: Style.space(4)
+  spacing: Style.space(6)
 
-  PanelActionButton {
-    iconText: "\uf048"; tooltipText: "Previous Track"
-    foreground: p.foreground; hoverColor: Color.accent; fontFamily: p.fontFamily
-    onClicked: p.prevTrack()
-  }
-
-  PanelActionButton {
-    iconText: p.isPlaying ? "\uf04c" : "\uf04b"
-    tooltipText: p.isPlaying ? "Pause" : "Play"
-    foreground: p.isPlaying ? Color.accent : p.foreground
-    hoverColor: Color.accent; fontFamily: p.fontFamily
-    onClicked: p.togglePlayback()
-  }
-
-  PanelActionButton {
-    iconText: "\uf04d"; tooltipText: "Stop Playback"
-    foreground: p.foreground; hoverColor: p.urgent; fontFamily: p.fontFamily
-    onClicked: p.stop()
-  }
-
-  PanelActionButton {
-    iconText: "\uf051"; tooltipText: "Next Track"
-    foreground: p.foreground; hoverColor: Color.accent; fontFamily: p.fontFamily
-    onClicked: p.nextTrack()
-  }
-
+  // Shuffle toggle
   PanelActionButton {
     iconText: "\uf074"; tooltipText: "Shuffle: " + (p.shuffleMode ? "ON" : "OFF")
     foreground: p.shuffleMode ? Color.accent : p.dim
     hoverColor: Color.accent; fontFamily: p.fontFamily
+    anchors.verticalCenter: parent.verticalCenter
     onClicked: p.toggleShuffle()
   }
 
+  // Previous Track
+  PanelActionButton {
+    iconText: "\uf048"; tooltipText: "Previous Track"
+    foreground: p.foreground; hoverColor: Color.accent; fontFamily: p.fontFamily
+    anchors.verticalCenter: parent.verticalCenter
+    onClicked: p.prevTrack()
+  }
+
+  // Primary Play / Pause Action Button
+  Rectangle {
+    width: Style.space(30); height: Style.space(30); radius: width / 2
+    anchors.verticalCenter: parent.verticalCenter
+    color: playMouse.pressed ? Qt.darker(Color.accent, 1.2) : (playMouse.containsMouse ? Qt.lighter(Color.accent, 1.15) : Color.accent)
+
+    Text {
+      anchors.centerIn: parent
+      text: p.isPlaying ? "\uf04c" : "\uf04b"
+      color: "#000000"
+      font.family: p.fontFamily; font.pixelSize: Style.font.bodySmall; font.bold: true
+    }
+
+    MouseArea {
+      id: playMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+      onClicked: p.togglePlayback()
+    }
+  }
+
+  // Next Track
+  PanelActionButton {
+    iconText: "\uf051"; tooltipText: "Next Track"
+    foreground: p.foreground; hoverColor: Color.accent; fontFamily: p.fontFamily
+    anchors.verticalCenter: parent.verticalCenter
+    onClicked: p.nextTrack()
+  }
+
+  // Repeat Mode
   PanelActionButton {
     iconText: "\uf01e"; tooltipText: "Repeat: " + p.repeatMode.toUpperCase()
     foreground: p.repeatMode !== "off" ? Color.accent : p.dim
     hoverColor: Color.accent; fontFamily: p.fontFamily
+    anchors.verticalCenter: parent.verticalCenter
     onClicked: p.cycleRepeat()
   }
 
-  Item { width: Style.space(8) }
+  // Stop Playback
+  PanelActionButton {
+    iconText: "\uf04d"; tooltipText: "Stop Playback"
+    foreground: p.foreground; hoverColor: p.urgent; fontFamily: p.fontFamily
+    anchors.verticalCenter: parent.verticalCenter
+    onClicked: p.stop()
+  }
 
+  Item { width: Style.space(4) }
+
+  // Volume Section
   Row {
     anchors.verticalCenter: parent.verticalCenter
-    spacing: Style.space(4)
+    spacing: Style.space(5)
 
     Text {
       anchors.verticalCenter: parent.verticalCenter
@@ -68,7 +90,7 @@ Row {
     }
 
     Item {
-      width: Style.space(56); height: Style.space(16)
+      width: Style.space(64); height: Style.space(16)
       anchors.verticalCenter: parent.verticalCenter
 
       Rectangle {

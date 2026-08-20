@@ -186,59 +186,75 @@ Item {
         }
       }
 
-      // Track Title Marquee
-      BorderSurface {
+      // Now Playing Info (Thumbnail + Title + Artist)
+      Row {
         width: parent.width
-        implicitHeight: Style.space(36)
-        radius: Style.space(3)
-        color: "#0c0d10"
-        borderSpec: Border.flat(Qt.darker(Color.accent, 1.8), 1)
+        spacing: Style.space(8)
 
-        Row {
-          anchors.fill: parent
-          anchors.margins: Style.space(4)
-          spacing: Style.space(6)
+        BorderSurface {
+          width: Style.space(36); height: Style.space(36)
+          radius: Style.cornerRadius
+          color: Qt.rgba(0.08, 0.09, 0.12, 0.9)
+          borderSpec: Border.flat(Qt.rgba(1, 1, 1, 0.08), 1)
+          anchors.verticalCenter: parent.verticalCenter
 
           Image {
+            anchors.fill: parent; anchors.margins: 1
             visible: p.artPath !== ""
-            width: Style.space(28); height: Style.space(28)
-            anchors.verticalCenter: parent.verticalCenter
             source: p.artPath !== "" ? "file://" + p.artPath : ""
             fillMode: Image.PreserveAspectCrop
-            sourceSize.width: 56; sourceSize.height: 56
+            sourceSize.width: 72; sourceSize.height: 72
           }
 
           Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: p.isPlaying ? "\uf04b" : (p.playbackState === "paused" ? "\uf04c" : "\uf04d")
-            color: p.isPlaying ? "#00ff66" : Color.accent
+            anchors.centerIn: parent
+            visible: p.artPath === ""
+            text: "\uf001"
+            color: Color.accent
             font.family: p.fontFamily; font.pixelSize: Style.font.caption
           }
+        }
+
+        Column {
+          width: parent.width - Style.space(46)
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: Style.space(2)
 
           Text {
-            width: parent.width - Style.space(20) - (p.artPath !== "" ? Style.space(34) : 0)
-            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width
             textFormat: Text.PlainText
             text: {
-              if (!p.isRunning) return "daemon idle — click play to start"
-              var a = p.currentArtist, t = p.currentTrack
-              return (a ? a + " - " : "") + t
+              if (!p.isRunning) return "Daemon idle — click play to start"
+              return p.currentTrack || "No track loaded"
             }
-            color: p.isPlaying ? "#00ff66" : p.foreground
+            color: p.isPlaying ? Color.accent : p.foreground
             font.family: p.fontFamily; font.pixelSize: Style.font.bodySmall
             font.bold: true; elide: Text.ElideRight
+          }
+
+          Text {
+            width: parent.width
+            textFormat: Text.PlainText
+            text: p.currentArtist ? p.currentArtist : (p.isRunning ? "cliamp playback" : "omarchy audio")
+            color: p.dim
+            font.family: p.fontFamily; font.pixelSize: Style.font.caption
+            elide: Text.ElideRight
           }
         }
       }
 
-      // Visualizer Canvas
-      Item {
+      // Visualizer Canvas Frame
+      BorderSurface {
         width: parent.width
-        height: Style.space(42)
+        height: Style.space(48)
+        radius: Style.space(4)
+        color: "#08090b"
+        borderSpec: Border.flat(Qt.rgba(1, 1, 1, 0.08), 1)
 
         Canvas {
           id: visCanvas
           anchors.fill: parent
+          anchors.margins: Style.space(3)
 
           onPaint: {
             var ctx = getContext("2d")
@@ -248,7 +264,7 @@ Item {
             var fn = root._renderers[p.visMode]
             if (fn) fn(ctx, {
               bands: p.visBands, wave: p.visWave, frame: p.visFrame,
-              playing: p.isPlaying, width: width, height: height, S: 4,
+              playing: p.isPlaying, width: width, height: height, S: 2,
               count: count, barW: barW, gap: gap,
               accent: Color.accent, foreground: p.foreground, dim: p.dim,
               state: p._visState
@@ -266,11 +282,29 @@ Item {
           }
         }
 
-        Text {
+        Rectangle {
           anchors.right: parent.right; anchors.bottom: parent.bottom
-          text: root._modeLabels[p.visMode] || p.visMode
-          color: Qt.rgba(1, 1, 1, 0.5)
-          font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8; font.bold: true
+          anchors.margins: Style.space(3)
+          width: modeText.implicitWidth + Style.space(8); height: Style.space(14)
+          radius: Style.space(3)
+          color: modeMouse.containsMouse ? Color.accent : Qt.rgba(0, 0, 0, 0.65)
+
+          Text {
+            id: modeText
+            anchors.centerIn: parent
+            text: root._modeLabels[p.visMode] || p.visMode
+            color: modeMouse.containsMouse ? "#000000" : Qt.rgba(1, 1, 1, 0.7)
+            font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.75; font.bold: true
+          }
+
+          MouseArea {
+            id: modeMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              var idx = p.visModes.indexOf(p.visMode)
+              p.visMode = p.visModes[(idx + 1) % p.visModes.length]
+              visCanvas.requestPaint()
+            }
+          }
         }
       }
 

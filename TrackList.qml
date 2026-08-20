@@ -147,21 +147,37 @@ Column {
         model: p.selectedTab === "search" && !p.isSearching ? p.searchResults : []
         delegate: BorderSurface {
           id: searchRow
-          width: parent.width; implicitHeight: Style.space(32); radius: Style.cornerRadius
-          color: searchMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent"
-          borderSpec: Border.none
+          readonly property bool isCurrent: (p.currentUrl === modelData.url) || (p.currentTrack === modelData.title && p.currentTrack !== "No track loaded")
+          width: parent.width; implicitHeight: Style.space(34); radius: Style.cornerRadius
+          color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : (searchMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
+          borderSpec: isCurrent ? Border.flat(Color.accent, 1) : Border.none
 
           Row {
-            width: parent.width - Style.space(8); anchors.centerIn: parent; spacing: Style.space(6)
+            width: parent.width - Style.space(10); anchors.centerIn: parent; spacing: Style.space(8)
 
-            Image {
-              visible: modelData.thumb !== undefined && modelData.thumb !== ""
-              width: Style.space(28); height: Style.space(28)
+            // Rounded thumbnail
+            BorderSurface {
+              width: Style.space(26); height: Style.space(26); radius: Style.space(3)
+              color: Qt.rgba(0.1, 0.1, 0.14, 0.9)
+              borderSpec: Border.none
               anchors.verticalCenter: parent.verticalCenter
-              source: modelData.thumb ? "file://" + modelData.thumb : ""
-              fillMode: Image.PreserveAspectCrop; sourceSize.width: 56; sourceSize.height: 56
+
+              Image {
+                visible: modelData.thumb !== undefined && modelData.thumb !== ""
+                anchors.fill: parent
+                source: modelData.thumb ? "file://" + modelData.thumb : ""
+                fillMode: Image.PreserveAspectCrop; sourceSize.width: 52; sourceSize.height: 52
+              }
+
+              Text {
+                visible: !modelData.thumb
+                anchors.centerIn: parent
+                text: "\uf001"; color: searchRow.isCurrent ? Color.accent : p.dim
+                font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8
+              }
             }
 
+            // Play / Loading icon
             Text {
               visible: p.loadingVid === modelData.url
               anchors.verticalCenter: parent.verticalCenter
@@ -173,22 +189,38 @@ Column {
             Text {
               visible: p.loadingVid !== modelData.url
               anchors.verticalCenter: parent.verticalCenter
-              text: "\uf04b"
-              color: searchMouse.containsMouse ? Color.accent : p.dim
+              text: searchRow.isCurrent && p.isPlaying ? "\uf04c" : "\uf04b"
+              color: searchRow.isCurrent ? Color.accent : (searchMouse.containsMouse ? Color.accent : p.dim)
               font.family: p.fontFamily; font.pixelSize: Style.font.caption
             }
 
+            // Title & Artist
             Column {
-              width: parent.width - Style.space(12) - durText.implicitWidth - Style.space(12) - (modelData.thumb ? Style.space(34) : 0)
-              anchors.verticalCenter: parent.verticalCenter; spacing: 0
-              Text { width: parent.width; textFormat: Text.PlainText; text: modelData.title || "Track"; color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true; elide: Text.ElideRight }
-              Text { width: parent.width; textFormat: Text.PlainText; text: modelData.artist || ""; color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption; elide: Text.ElideRight; visible: modelData.artist !== "" }
+              width: parent.width - Style.space(80)
+              anchors.verticalCenter: parent.verticalCenter; spacing: 1
+
+              Text {
+                width: parent.width; textFormat: Text.PlainText
+                text: modelData.title || "Track"
+                color: searchRow.isCurrent ? Color.accent : p.foreground
+                font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+                elide: Text.ElideRight
+              }
+
+              Text {
+                width: parent.width; textFormat: Text.PlainText
+                text: modelData.artist || "Unknown Artist"
+                color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.85
+                elide: Text.ElideRight
+                visible: modelData.artist !== ""
+              }
             }
 
+            // Duration
             Text {
-              id: durText; anchors.verticalCenter: parent.verticalCenter
-              text: modelData.duration || ""; color: p.dim
-              font.family: p.fontFamily; font.pixelSize: Style.font.caption
+              anchors.verticalCenter: parent.verticalCenter
+              text: modelData.duration || ""
+              color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
             }
           }
 
@@ -204,21 +236,37 @@ Column {
         model: p.selectedTab === "history" ? p.historyList : []
         delegate: BorderSurface {
           id: trackRow
-          width: parent.width; implicitHeight: Style.space(28); radius: Style.cornerRadius
-          color: trackMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent"
-          borderSpec: Border.none
+          readonly property bool isCurrent: (p.currentUrl === modelData.path) || (p.currentTrack === modelData.title && p.currentTrack !== "No track loaded")
+          width: parent.width; implicitHeight: Style.space(34); radius: Style.cornerRadius
+          color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : (trackMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
+          borderSpec: isCurrent ? Border.flat(Color.accent, 1) : Border.none
 
           Row {
-            width: parent.width - Style.space(8); anchors.centerIn: parent; spacing: Style.space(6)
+            width: parent.width - Style.space(10); anchors.centerIn: parent; spacing: Style.space(8)
 
-            Image {
-              visible: modelData.thumb !== undefined && modelData.thumb !== ""
-              width: Style.space(28); height: Style.space(28)
+            // Rounded thumbnail
+            BorderSurface {
+              width: Style.space(26); height: Style.space(26); radius: Style.space(3)
+              color: Qt.rgba(0.1, 0.1, 0.14, 0.9)
+              borderSpec: Border.none
               anchors.verticalCenter: parent.verticalCenter
-              source: modelData.thumb ? "file://" + modelData.thumb : ""
-              fillMode: Image.PreserveAspectCrop; sourceSize.width: 56; sourceSize.height: 56
+
+              Image {
+                visible: modelData.thumb !== undefined && modelData.thumb !== ""
+                anchors.fill: parent
+                source: modelData.thumb ? "file://" + modelData.thumb : ""
+                fillMode: Image.PreserveAspectCrop; sourceSize.width: 52; sourceSize.height: 52
+              }
+
+              Text {
+                visible: !modelData.thumb
+                anchors.centerIn: parent
+                text: "\uf001"; color: trackRow.isCurrent ? Color.accent : p.dim
+                font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8
+              }
             }
 
+            // Play / Status Icon
             Text {
               visible: p.loadingVid === modelData.path
               anchors.verticalCenter: parent.verticalCenter
@@ -230,21 +278,36 @@ Column {
             Text {
               visible: p.loadingVid !== modelData.path
               anchors.verticalCenter: parent.verticalCenter
-              text: "\uf04b"
-              color: trackMouse.containsMouse ? Color.accent : p.dim
+              text: trackRow.isCurrent && p.isPlaying ? "\uf04c" : "\uf04b"
+              color: trackRow.isCurrent ? Color.accent : (trackMouse.containsMouse ? Color.accent : p.dim)
               font.family: p.fontFamily; font.pixelSize: Style.font.caption
             }
 
-            Text {
-              width: parent.width - Style.space(12) - recDurText.implicitWidth - Style.space(12) - (modelData.thumb ? Style.space(34) : 0)
-              anchors.verticalCenter: parent.verticalCenter
-              textFormat: Text.PlainText
-              text: (modelData.artist ? modelData.artist + " - " : "") + (modelData.title || "Track")
-              color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; elide: Text.ElideRight
+            // Title & Artist
+            Column {
+              width: parent.width - Style.space(80)
+              anchors.verticalCenter: parent.verticalCenter; spacing: 1
+
+              Text {
+                width: parent.width; textFormat: Text.PlainText
+                text: modelData.title || "Track"
+                color: trackRow.isCurrent ? Color.accent : p.foreground
+                font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+                elide: Text.ElideRight
+              }
+
+              Text {
+                width: parent.width; textFormat: Text.PlainText
+                text: modelData.artist || "Unknown Artist"
+                color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.85
+                elide: Text.ElideRight
+                visible: modelData.artist !== ""
+              }
             }
 
+            // Duration
             Text {
-              id: recDurText; anchors.verticalCenter: parent.verticalCenter
+              anchors.verticalCenter: parent.verticalCenter
               text: {
                 var s = modelData.duration_secs || 0
                 var m = Math.floor(s / 60), sec = s % 60
