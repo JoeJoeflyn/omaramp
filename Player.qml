@@ -35,6 +35,9 @@ import "visualizers/ascii.js" as VisAscii
 import "visualizers/sine.js" as VisSine
 import "visualizers/siriwave.js" as VisSiriWave
 import "visualizers/scrubber_wave.js" as VisScrubberWave
+import "visualizers/soundcloud_wave.js" as VisSoundCloudWave
+import "visualizers/dj_spectral.js" as VisDJSpectral
+import "visualizers/voice_pill.js" as VisVoicePill
 
 // HUD header + visualizer canvas + seek bar
 Item {
@@ -117,7 +120,9 @@ Item {
     "terrain": VisTerrain.render, "logo": VisLogo.render, "firefly": VisFirefly.render,
     "geyser": VisGeyser.render, "mosaic": VisMosaic.render, "sand": VisSand.render,
     "stereo": VisStereo.render, "ascii": VisAscii.render, "sine": VisSine.render,
-    "siriwave": VisSiriWave.render, "scrubber_wave": VisScrubberWave.render
+    "siriwave": VisSiriWave.render, "scrubber_wave": VisScrubberWave.render,
+    "soundcloud_wave": VisSoundCloudWave.render, "dj_spectral": VisDJSpectral.render,
+    "voice_pill": VisVoicePill.render
   })
 
   readonly property var _modeLabels: ({
@@ -131,7 +136,9 @@ Item {
     "terrain": "Terrain", "logo": "Logo", "firefly": "Firefly",
     "geyser": "Geyser", "mosaic": "Mosaic", "sand": "Sand",
     "stereo": "Stereo", "ascii": "Ascii", "sine": "Sine Wave",
-    "siriwave": "Siri Wave", "scrubber_wave": "Scrubber Wave"
+    "siriwave": "Siri Wave", "scrubber_wave": "Scrubber Wave",
+    "soundcloud_wave": "SoundCloud Wave", "dj_spectral": "DJ Spectral Wave",
+    "voice_pill": "Voice Pill Wave"
   })
 
   function requestPaint() { if (visCanvas) visCanvas.requestPaint() }
