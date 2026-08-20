@@ -68,6 +68,9 @@ Panel {
   property var _visState: ({})
   property var resumeInfo: null
   property bool resumeVisible: false
+  property var activePlaylist: null
+  property bool isImportingPl: false
+  property string plImportError: ""
 
   onOpenedChanged: {
     if (!opened) {
@@ -183,10 +186,47 @@ Panel {
     root.audioFx = { eq: root.eqText, loudnorm: root.audioFx ? root.audioFx.loudnorm : false, spatial: next }
   }
   function importPlaylist(url, name) {
-    if (!url || !url.trim()) return
-    runCmd(["import_playlist", url.trim(), name || ""])
+    if (!url || !url.trim() || root.isImportingPl) return
+    root.isImportingPl = true
+    root.plImportError = ""
+    root.selectedTab = "playlists"
+    root.activePlaylist = null
+    importPlProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "import_playlist", url.trim(), name || ""]
+    importPlProc.running = true
+  }
+
+  function deletePlaylist(name) {
+    if (!name) return
+    if (root.activePlaylist && root.activePlaylist.name === name) {
+      root.activePlaylist = null
+    }
+    runCmd(["delete_playlist", name])
     Qt.callLater(loadPlaylists)
   }
+
+  function openPlaylist(pl) {
+    if (!pl) return
+    if (pl.system || pl.name === "Recently Played") {
+      var recents = []
+      for (var i = 0; i < root.historyList.length; i++) {
+        var h = root.historyList[i]
+        recents.push({
+          title: h.title || "Track",
+          artist: h.artist || "",
+          duration: h.duration_secs ? (Math.floor(h.duration_secs / 60) + ":" + (h.duration_secs % 60 < 10 ? "0" + (h.duration_secs % 60) : (h.duration_secs % 60))) : "",
+          url: h.path || (h.title + " " + h.artist)
+        })
+      }
+      root.activePlaylist = { name: "Recently Played", tracks: recents, system: true }
+    } else {
+      root.activePlaylist = pl
+    }
+  }
+
+  function closePlaylist() {
+    root.activePlaylist = null
+  }
+
   function doResume() { runCmd(["resume"]); root.resumeVisible = false; root.loadingVid = "" }
 
   function playUrl(url, title, artist) {
@@ -233,7 +273,6 @@ Panel {
     root.selectedTab = "history"
   }
 
-  function loadPlaylist(name) { runCmd(["load", name]) }
   function playPlaylist(pl) {
     if (!pl || !pl.tracks || pl.tracks.length === 0) return
     var t0 = pl.tracks[0]
@@ -341,6 +380,27 @@ Panel {
       onStreamFinished: {
         try { root.playlistsList = JSON.parse(text || "[]") }
         catch (e) { root.playlistsList = [] }
+      }
+    }
+  }
+
+  Process {
+    id: importPlProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        root.isImportingPl = false
+        try {
+          var res = JSON.parse(text || "{}")
+          if (res.success) {
+            root.plImportError = ""
+            loadPlaylists()
+          } else {
+            root.plImportError = res.error || "Failed to import playlist"
+          }
+        } catch (e) {
+          root.plImportError = "Error importing playlist"
+        }
       }
     }
   }

@@ -348,31 +348,226 @@ Column {
         }
       }
 
-      // Playlists
-      Repeater {
-        model: p.selectedTab === "playlists" ? p.playlistsList : []
-        delegate: BorderSurface {
-          id: plRow
-          width: parent.width; implicitHeight: Style.space(28); radius: Style.cornerRadius
-          color: plMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent"
-          borderSpec: Border.none
+      // Playlists Tab
+      Column {
+        visible: p.selectedTab === "playlists"
+        width: parent.width
+        spacing: Style.space(6)
 
-          Row {
-            width: parent.width - Style.space(8); anchors.centerIn: parent; spacing: Style.space(6)
+        // Sub-view: Active Playlist Tracks Browser
+        Column {
+          visible: p.activePlaylist !== null
+          width: parent.width
+          spacing: Style.space(6)
 
-            Text { anchors.verticalCenter: parent.verticalCenter; text: "\uf0ca"; color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.caption }
-            Text { width: parent.width - Style.space(60); anchors.verticalCenter: parent.verticalCenter; text: modelData.name || "Playlist"; color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true; elide: Text.ElideRight }
-            Item { width: Style.space(4) }
-            Text { anchors.verticalCenter: parent.verticalCenter; text: modelData.count + " tracks"; color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption }
+          // Header with Back, Title, Play All, Delete
+          BorderSurface {
+            width: parent.width; implicitHeight: Style.space(32); radius: Style.cornerRadius
+            color: Color.popups.background
+            borderSpec: Border.controlSpec("normal", p.foreground, Color.accent)
+
+            Row {
+              anchors.fill: parent; anchors.margins: Style.space(6); spacing: Style.space(6)
+
+              // Back button
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "\uf060"
+                color: backMouse.containsMouse ? Color.accent : p.foreground
+                font.family: p.fontFamily; font.pixelSize: Style.font.caption
+                MouseArea {
+                  id: backMouse; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                  onClicked: p.closePlaylist()
+                }
+              }
+
+              // Playlist title + count
+              Text {
+                width: parent.width - Style.space(110); anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: (p.activePlaylist ? p.activePlaylist.name : "") + " (" + ((p.activePlaylist && p.activePlaylist.tracks) ? p.activePlaylist.tracks.length : 0) + ")"
+                color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+                elide: Text.ElideRight
+              }
+
+              // Play All Button
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "\uf04b Play"
+                color: playAllMouse.containsMouse ? Color.accent : p.foreground
+                font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+                MouseArea {
+                  id: playAllMouse; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                  onClicked: p.playPlaylist(p.activePlaylist)
+                }
+              }
+
+              // Delete button (custom playlists only)
+              Text {
+                visible: p.activePlaylist && !p.activePlaylist.system
+                anchors.verticalCenter: parent.verticalCenter
+                text: "\uf1f8"
+                color: delPlMouse.containsMouse ? p.urgent : p.dim
+                font.family: p.fontFamily; font.pixelSize: Style.font.caption
+                MouseArea {
+                  id: delPlMouse; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                  onClicked: p.deletePlaylist(p.activePlaylist.name)
+                }
+              }
+            }
           }
 
-          MouseArea {
-            id: plMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-            onClicked: {
-              if (modelData.tracks && modelData.tracks.length > 0) {
-                p.playPlaylist(modelData)
-              } else if (modelData.name) {
-                p.loadPlaylist(modelData.name)
+          // Empty state for active playlist
+          Text {
+            visible: p.activePlaylist && (!p.activePlaylist.tracks || p.activePlaylist.tracks.length === 0)
+            text: "No tracks in this playlist"
+            color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
+            horizontalAlignment: Text.AlignHCenter
+            width: parent.width
+          }
+
+          // Active playlist track items
+          Repeater {
+            model: (p.activePlaylist && p.activePlaylist.tracks) ? p.activePlaylist.tracks : []
+            delegate: BorderSurface {
+              id: plTrackRow
+              readonly property bool isCurrent: (p.currentUrl === modelData.url) || (p.currentTrack === modelData.title && p.currentTrack !== "No track loaded")
+              width: parent.width; implicitHeight: Style.space(28); radius: Style.cornerRadius
+              color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : (plTrackMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
+              borderSpec: isCurrent ? Border.flat(Color.accent, 1) : Border.none
+
+              Row {
+                width: parent.width - Style.space(8); anchors.centerIn: parent; spacing: Style.space(6)
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: plTrackRow.isCurrent && p.isPlaying ? "\uf04c" : "\uf04b"
+                  color: plTrackRow.isCurrent ? Color.accent : (plTrackMouse.containsMouse ? Color.accent : p.dim)
+                  font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8
+                }
+
+                Column {
+                  width: parent.width - Style.space(80); anchors.verticalCenter: parent.verticalCenter; spacing: 1
+                  Text {
+                    width: parent.width; textFormat: Text.PlainText
+                    text: modelData.title || "Track"
+                    color: plTrackRow.isCurrent ? Color.accent : p.foreground
+                    font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+                    elide: Text.ElideRight
+                  }
+                  Text {
+                    visible: modelData.artist !== ""
+                    width: parent.width; textFormat: Text.PlainText
+                    text: modelData.artist || ""
+                    color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8
+                    elide: Text.ElideRight
+                  }
+                }
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: modelData.duration || ""
+                  color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
+                }
+              }
+
+              MouseArea {
+                id: plTrackMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                onClicked: p.playUrl(modelData.url, modelData.title, modelData.artist)
+              }
+            }
+          }
+        }
+
+        // Sub-view: Playlists List & Import Bar
+        Column {
+          visible: p.activePlaylist === null
+          width: parent.width
+          spacing: Style.space(6)
+
+          // Importing loader
+          Row {
+            visible: p.isImportingPl
+            width: parent.width; spacing: Style.space(6)
+            Text { anchors.verticalCenter: parent.verticalCenter; text: "\uf110"; color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.caption; RotationAnimator on rotation { running: p.isImportingPl; from: 0; to: 360; duration: 1000; loops: Animation.Infinite } }
+            Text { anchors.verticalCenter: parent.verticalCenter; text: "Importing playlist tracks..."; color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption }
+          }
+
+          // Import error
+          Text {
+            visible: p.plImportError !== ""
+            text: p.plImportError
+            color: p.urgent; font.family: p.fontFamily; font.pixelSize: Style.font.caption
+          }
+
+          // Playlist cards
+          Repeater {
+            model: p.playlistsList
+            delegate: BorderSurface {
+              id: plRow
+              width: parent.width; implicitHeight: Style.space(32); radius: Style.cornerRadius
+              color: plMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : Color.popups.background
+              borderSpec: Border.controlSpec("normal", p.foreground, Color.accent)
+
+              Row {
+                width: parent.width - Style.space(12); anchors.centerIn: parent; spacing: Style.space(8)
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: modelData.system ? "\uf017" : "\uf0ca"
+                  color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.caption
+                }
+
+                Column {
+                  width: parent.width - Style.space(80); anchors.verticalCenter: parent.verticalCenter; spacing: 1
+                  Text {
+                    width: parent.width; textFormat: Text.PlainText
+                    text: modelData.name || "Playlist"
+                    color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+                    elide: Text.ElideRight
+                  }
+                  Text {
+                    text: modelData.count + " tracks"
+                    color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.85
+                  }
+                }
+
+                // Quick Play All button
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "\uf04b"
+                  color: plPlayMouse.containsMouse ? Color.accent : p.dim
+                  font.family: p.fontFamily; font.pixelSize: Style.font.caption
+                  MouseArea {
+                    id: plPlayMouse; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                      if (modelData.system) {
+                        p.openPlaylist(modelData)
+                        p.playPlaylist(p.activePlaylist)
+                      } else {
+                        p.playPlaylist(modelData)
+                      }
+                    }
+                  }
+                }
+
+                // Delete button
+                Text {
+                  visible: !modelData.system
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "\uf1f8"
+                  color: plDelMouse.containsMouse ? p.urgent : p.dim
+                  font.family: p.fontFamily; font.pixelSize: Style.font.caption
+                  MouseArea {
+                    id: plDelMouse; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    onClicked: p.deletePlaylist(modelData.name)
+                  }
+                }
+              }
+
+              MouseArea {
+                id: plMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                onClicked: p.openPlaylist(modelData)
               }
             }
           }

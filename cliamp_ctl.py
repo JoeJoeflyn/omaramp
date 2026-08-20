@@ -156,6 +156,14 @@ def save_playlists(pl_list):
     except Exception:
         pass
 
+def delete_playlist(name):
+    if not name:
+        return {"success": False}
+    playlists = parse_playlists()
+    playlists = [p for p in playlists if p.get("name") != name]
+    save_playlists(playlists)
+    return {"success": True}
+
 def import_playlist(url, custom_name=None):
     if not url or not is_safe_url(url):
         return {"success": False, "error": "Invalid or unsafe URL"}
@@ -200,22 +208,46 @@ def import_playlist(url, custom_name=None):
     # 2. Spotify Playlist / Album
     elif "spotify.com" in url:
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-            html = urllib.request.urlopen(req, timeout=6.0).read().decode("utf-8")
-            if not pl_name:
-                title_m = re.search(r"<title>(.*?)(?: - playlist by| \| Spotify)</title>", html)
-                pl_name = title_m.group(1).strip() if title_m else "Spotify Playlist"
+            embed_url = url
+            if "/playlist/" in url or "/album/" in url:
+                embed_url = re.sub(r"spotify\.com/(playlist|album)/", r"spotify.com/embed/\1/", url)
             
-            for m in re.finditer(r"itemprop=\"name\" content=\"([^\"]+)\".*?itemprop=\"description\" content=\"([^\"]+)\"", html):
-                t = m.group(1).strip()
-                a = m.group(2).strip()
-                tracks.append({
-                    "id": "",
-                    "title": t,
-                    "artist": a,
-                    "duration": "",
-                    "url": f"{t} {a}"
-                })
+            req = urllib.request.Request(embed_url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"})
+            html = urllib.request.urlopen(req, timeout=8.0).read().decode("utf-8")
+            
+            m = re.search(r'<script id="__NEXT_DATA__" type="application/json">([\s\S]*?)</script>', html)
+            if m:
+                data = json.loads(m.group(1))
+                entity = data.get("props", {}).get("pageProps", {}).get("state", {}).get("data", {}).get("entity", {})
+                if not pl_name:
+                    pl_name = entity.get("name") or "Spotify Playlist"
+                track_list = entity.get("trackList", [])
+                for t in track_list:
+                    title = t.get("title", "").strip()
+                    artist = t.get("subtitle", "").strip()
+                    dur = format_seconds(int(t.get("duration", 0) / 1000)) if t.get("duration") else ""
+                    if title:
+                        tracks.append({
+                            "id": "",
+                            "title": title,
+                            "artist": artist,
+                            "duration": dur,
+                            "url": f"{title} {artist}"
+                        })
+            if not tracks:
+                if not pl_name:
+                    title_m = re.search(r"<title>(.*?)(?: - playlist by| \| Spotify)</title>", html)
+                    pl_name = title_m.group(1).strip() if title_m else "Spotify Playlist"
+                for m in re.finditer(r'itemprop="name" content="([^"]+)".*?itemprop="description" content="([^"]+)"', html):
+                    t = m.group(1).strip()
+                    a = m.group(2).strip()
+                    tracks.append({
+                        "id": "",
+                        "title": t,
+                        "artist": a,
+                        "duration": "",
+                        "url": f"{t} {a}"
+                    })
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -761,6 +793,9 @@ if __name__ == "__main__":
         u = sys.argv[2] if len(sys.argv) > 2 else ""
         n = sys.argv[3] if len(sys.argv) > 3 else None
         print(json.dumps(import_playlist(u, n)))
+    elif action == "delete_playlist":
+        n = sys.argv[2] if len(sys.argv) > 2 else ""
+        print(json.dumps(delete_playlist(n)))
     elif action == "toggle_loudnorm":
         cur = get_audio_fx()
         print(json.dumps(apply_audio_fx(loudnorm=not cur.get("loudnorm", False))))
