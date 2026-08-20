@@ -34,7 +34,7 @@ import "visualizers/stereo.js" as VisStereo
 import "visualizers/ascii.js" as VisAscii
 import "visualizers/sine.js" as VisSine
 import "visualizers/siriwave.js" as VisSiriWave
-import "visualizers/sound_wave.js" as VisSoundWave
+import "visualizers/scrubber_wave.js" as VisScrubberWave
 
 // HUD header + visualizer canvas + seek bar
 Item {
@@ -117,7 +117,7 @@ Item {
     "terrain": VisTerrain.render, "logo": VisLogo.render, "firefly": VisFirefly.render,
     "geyser": VisGeyser.render, "mosaic": VisMosaic.render, "sand": VisSand.render,
     "stereo": VisStereo.render, "ascii": VisAscii.render, "sine": VisSine.render,
-    "siriwave": VisSiriWave.render
+    "siriwave": VisSiriWave.render, "scrubber_wave": VisScrubberWave.render
   })
 
   readonly property var _modeLabels: ({
@@ -131,7 +131,7 @@ Item {
     "terrain": "Terrain", "logo": "Logo", "firefly": "Firefly",
     "geyser": "Geyser", "mosaic": "Mosaic", "sand": "Sand",
     "stereo": "Stereo", "ascii": "Ascii", "sine": "Sine Wave",
-    "siriwave": "Siri Wave"
+    "siriwave": "Siri Wave", "scrubber_wave": "Scrubber Wave"
   })
 
   function requestPaint() { if (visCanvas) visCanvas.requestPaint() }
@@ -406,7 +406,7 @@ Item {
               playing: p.isPlaying, width: width, height: height, S: 2,
               count: count, barW: barW, gap: gap,
               accent: p.dynamicAccent, foreground: p.foreground, dim: p.dim,
-              beatDrop: root.beatDropPulse,
+              beatDrop: root.beatDropPulse, progress: p.progress,
               state: p._visState
             })
           }
