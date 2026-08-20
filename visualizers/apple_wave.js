@@ -1,4 +1,4 @@
-// Apple Sound Wave — Apple Music & Dynamic Island rounded capsule audio bars (|||)
+// Apple Music Wave — Dynamic Island & Now Playing fluid capsule equalizer bars (|||||)
 .pragma library
 .import "helpers.js" as H
 
@@ -8,21 +8,20 @@ function render(ctx, d) {
   var isPlaying = d.playing
   var midY = h / 2.0
 
-  // 24 Apple rounded capsule bars
-  var numBars = 24
+  // 7 Apple Music / Dynamic Island bold capsule bars
+  var numBars = 7
   var resampled = H.resampleBandsLinear(bands, numBars)
-  var bass = H.bandAvg(resampled, 0, 4)
   var beatDrop = d.beatDrop || 0
 
-  // Calculate layout dimensions
-  var gap = Math.max(2, Math.floor(w / 80))
-  var barWidth = Math.floor((w - (numBars - 1) * gap - 8) / numBars)
+  // Dimensions & Spacing: Bold, chunky pill bars centered in canvas
+  var barWidth = Math.max(4, Math.floor(w / 45))
+  var gap = Math.max(3, Math.floor(barWidth * 0.75))
   var totalW = numBars * barWidth + (numBars - 1) * gap
   var startX = Math.floor((w - totalW) / 2)
 
-  // Apple Gradient Palette (Dynamic Accent to Electric Cyan / Magenta / Apple White)
+  // Apple Accent Color (Matches album artwork accent)
   var acc = d.accent
-  var ar = 100, ag = 180, ab = 255
+  var ar = 250, ag = 80, ab = 130 // Apple Music signature rose-pink default
   if (acc) {
     if (typeof acc === "string" && acc.charAt(0) === "#" && acc.length === 7) {
       ar = parseInt(acc.substr(1, 2), 16)
@@ -35,48 +34,32 @@ function render(ctx, d) {
     }
   }
 
-  // Draw each Apple capsule bar centered on midY
+  // Draw 7 Apple Music capsule bars centered on midY
   for (var i = 0; i < numBars; i++) {
     var bx = startX + i * (barWidth + gap)
-    var energy = isPlaying ? (resampled[i] || 0) : 0.04
+    var energy = isPlaying ? (resampled[i] || 0) : 0.0
 
-    // Dynamic Island / Apple Voice Memo spring height
+    // Minimum resting pill height (dot when idle, energetic when playing)
     var minH = barWidth
-    var maxH = h * 0.82
-    var kickBoost = (i >= 2 && i <= 8) ? (beatDrop * (h * 0.20)) : 0
+    var maxH = h * 0.85
+    var kickBoost = (i === 1 || i === 2 || i === 3) ? (beatDrop * (h * 0.25)) : 0
     var barH = Math.max(minH, minH + (energy * (maxH - minH)) + kickBoost)
 
     var by = midY - (barH / 2.0)
-    var radius = barWidth / 2.0
+    var r = barWidth / 2.0
 
-    // Apple Vertical Gradient
+    // Apple Vibrant Fluid Gradient (Top soft highlight -> body accent -> deeper bottom)
     var grad = ctx.createLinearGradient(0, by, 0, by + barH)
-    grad.addColorStop(0, "rgba(255, 255, 255, 0.95)")
-    grad.addColorStop(0.35, "rgba(" + Math.min(255, ar + 40) + "," + Math.min(255, ag + 30) + ", 255, 0.90)")
-    grad.addColorStop(1, "rgba(" + ar + "," + ag + "," + ab + ", 0.70)")
+    grad.addColorStop(0, "rgba(" + Math.min(255, ar + 50) + "," + Math.min(255, ag + 50) + "," + Math.min(255, ab + 50) + ", 0.98)")
+    grad.addColorStop(0.5, "rgba(" + ar + "," + ag + "," + ab + ", 0.95)")
+    grad.addColorStop(1, "rgba(" + Math.round(ar * 0.8) + "," + Math.round(ag * 0.8) + "," + Math.round(ab * 0.8) + ", 0.90)")
 
     ctx.fillStyle = grad
     ctx.beginPath()
-
-    // Draw smooth rounded pill / capsule
-    if (typeof ctx.roundRect === "function") {
-      ctx.roundRect(bx, by, barWidth, barH, radius)
-    } else {
-      ctx.moveTo(bx + radius, by)
-      ctx.lineTo(bx + barWidth - radius, by)
-      ctx.arc(bx + barWidth - radius, by + radius, radius, -Math.PI / 2, Math.PI / 2)
-      ctx.lineTo(bx + radius, by + barH)
-      ctx.arc(bx + radius, by + barH - radius, radius, Math.PI / 2, (3 * Math.PI) / 2)
-      ctx.closePath()
-    }
+    ctx.arc(bx + r, by + r, r, Math.PI, 0, false)
+    ctx.lineTo(bx + barWidth, by + barH - r)
+    ctx.arc(bx + r, by + barH - r, r, 0, Math.PI, false)
+    ctx.closePath()
     ctx.fill()
   }
-
-  // Apple center baseline glow
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.10)"
-  ctx.lineWidth = 1.0
-  ctx.beginPath()
-  ctx.moveTo(0, midY)
-  ctx.lineTo(w, midY)
-  ctx.stroke()
 }
