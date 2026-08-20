@@ -52,6 +52,7 @@ Panel {
   property string selectedTab: "history"
   property string urlInputText: ""
   property string visMode: "bars"
+  property bool visPickerOpen: false
   property var visModes: ["bars", "bars_dot", "bars_outline", "bricks", "columns", "classic_led", "peaks", "wave", "scope", "heartbeat", "retro", "scatter", "flame", "pulse", "matrix", "binary", "butterfly", "sakura", "firework", "bubbles", "rain", "terrain", "logo", "firefly", "geyser", "mosaic", "sand", "stereo", "ascii"]
 
   // Visualizer state
@@ -88,6 +89,7 @@ Panel {
 
   function close() {
     setCenterHoverRevealSuppressed(false)
+    root.visPickerOpen = false
     root.controller.hide()
     runCmd(["stop_spectrum"])
   }
@@ -400,7 +402,11 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       blocked: trackList.urlInput.activeFocus
-      onCloseRequested: root.close()
+      onCloseRequested: {
+        if (root.visPickerOpen) root.visPickerOpen = false
+        else if (playerComp.lyricsVisible) playerComp.toggleLyrics()
+        else root.close()
+      }
       onActivateRequested: root.togglePlayback()
       onMoveRequested: function(dx, dy) {
         if (dy < 0) root.adjustVolume(5)
@@ -466,11 +472,21 @@ Panel {
 
         PanelSeparator { foreground: root.foreground }
 
-        TrackList { id: trackList; p: root; visible: !playerComp.lyricsVisible }
+        TrackList { id: trackList; p: root; visible: !playerComp.lyricsVisible && !root.visPickerOpen }
+
+        // Visualizer Picker (Lazy loaded on demand)
+        Loader {
+          visible: root.visPickerOpen
+          active: root.visPickerOpen
+          width: parent.width
+          implicitHeight: Style.space(200)
+          source: "VisPicker.qml"
+          onLoaded: { if (item) item.p = root }
+        }
 
         // Lyrics view — replaces track list when toggled
         Item {
-          visible: playerComp.lyricsVisible
+          visible: playerComp.lyricsVisible && !root.visPickerOpen
           width: parent.width
           height: Style.space(200)
 

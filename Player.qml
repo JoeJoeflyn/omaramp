@@ -275,34 +275,39 @@ Item {
         MouseArea {
           anchors.fill: parent
           cursorShape: Qt.PointingHandCursor
-          onClicked: {
-            var idx = p.visModes.indexOf(p.visMode)
-            p.visMode = p.visModes[(idx + 1) % p.visModes.length]
-            visCanvas.requestPaint()
+          acceptedButtons: Qt.LeftButton | Qt.RightButton
+          onClicked: function(mouse) {
+            if (mouse.button === Qt.RightButton) {
+              p.visPickerOpen = !p.visPickerOpen
+              if (p.visPickerOpen && root.lyricsVisible) root.lyricsVisible = false
+            } else {
+              var idx = p.visModes.indexOf(p.visMode)
+              p.visMode = p.visModes[(idx + 1) % p.visModes.length]
+              visCanvas.requestPaint()
+            }
           }
         }
 
         Rectangle {
           anchors.right: parent.right; anchors.bottom: parent.bottom
           anchors.margins: Style.space(3)
-          width: modeText.implicitWidth + Style.space(8); height: Style.space(14)
+          width: modeText.implicitWidth + Style.space(10); height: Style.space(16)
           radius: Style.space(3)
-          color: modeMouse.containsMouse ? Color.accent : Qt.rgba(0, 0, 0, 0.65)
+          color: p.visPickerOpen ? Color.accent : (modeMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(0, 0, 0, 0.65))
 
           Text {
             id: modeText
             anchors.centerIn: parent
-            text: root._modeLabels[p.visMode] || p.visMode
-            color: modeMouse.containsMouse ? "#000000" : Qt.rgba(1, 1, 1, 0.7)
+            text: (root._modeLabels[p.visMode] || p.visMode) + " ▾"
+            color: p.visPickerOpen ? "#000000" : (modeMouse.containsMouse ? Color.accent : Qt.rgba(1, 1, 1, 0.8))
             font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.75; font.bold: true
           }
 
           MouseArea {
             id: modeMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
             onClicked: {
-              var idx = p.visModes.indexOf(p.visMode)
-              p.visMode = p.visModes[(idx + 1) % p.visModes.length]
-              visCanvas.requestPaint()
+              p.visPickerOpen = !p.visPickerOpen
+              if (p.visPickerOpen && root.lyricsVisible) root.lyricsVisible = false
             }
           }
         }
