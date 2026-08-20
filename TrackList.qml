@@ -152,6 +152,29 @@ Column {
       }
     }
 
+    // Queue Tab Pill
+    BorderSurface {
+      implicitHeight: Style.space(22)
+      implicitWidth: queueTabText.implicitWidth + Style.space(14)
+      radius: Style.cornerRadius
+      color: p.selectedTab === "queue" ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18) : "transparent"
+      borderSpec: p.selectedTab === "queue" ? Border.flat(Color.accent, 1) : Border.none
+
+      Text {
+        id: queueTabText
+        anchors.centerIn: parent
+        text: "Queue (" + (p.queueList ? p.queueList.length : p.queueCount) + ")"
+        color: p.selectedTab === "queue" ? Color.accent : p.dim
+        font.family: p.fontFamily; font.pixelSize: Style.font.caption
+        font.bold: p.selectedTab === "queue"
+      }
+
+      MouseArea {
+        anchors.fill: parent; cursorShape: Qt.PointingHandCursor; hoverEnabled: true
+        onClicked: { p.selectedTab = "queue"; p.loadQueue() }
+      }
+    }
+
     // Playlists Tab Pill
     BorderSurface {
       implicitHeight: Style.space(22)
@@ -419,6 +442,148 @@ Column {
                 return (m > 0 || sec > 0) ? (m + ":" + (sec < 10 ? "0" + sec : sec)) : ""
               }
               color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
+            }
+          }
+        }
+      }
+
+      // ==========================================
+      // QUEUE TAB CONTENT
+      // ==========================================
+      Column {
+        visible: p.selectedTab === "queue"
+        width: parent.width
+        spacing: Style.space(4)
+
+        // Queue Header Bar
+        BorderSurface {
+          visible: p.queueList && p.queueList.length > 0
+          width: parent.width; implicitHeight: Style.space(28); radius: Style.cornerRadius
+          color: Color.popups.background
+          borderSpec: Border.controlSpec("normal", p.foreground, Color.accent)
+
+          Row {
+            anchors.fill: parent; anchors.margins: Style.space(4); spacing: Style.space(6)
+            Text {
+              width: parent.width - Style.space(80); anchors.verticalCenter: parent.verticalCenter
+              text: "Up Next (" + p.queueList.length + " tracks)"
+              color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+              elide: Text.ElideRight
+            }
+
+            BorderSurface {
+              implicitHeight: Style.space(20); implicitWidth: clearQText.implicitWidth + Style.space(10)
+              radius: Style.cornerRadius
+              color: clearQMouse.containsMouse ? Qt.rgba(1, 0, 0, 0.25) : "transparent"
+              borderSpec: Border.none
+              anchors.verticalCenter: parent.verticalCenter
+
+              Text {
+                id: clearQText; anchors.centerIn: parent
+                text: "\uf1f8 Clear"
+                color: clearQMouse.containsMouse ? p.urgent : p.dim
+                font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.85
+              }
+              MouseArea {
+                id: clearQMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                onClicked: p.clearQueue()
+              }
+            }
+          }
+        }
+
+        // Empty state
+        Text {
+          visible: !p.queueList || p.queueList.length === 0
+          text: "Queue is empty\nClick '+' on any song to add to queue"
+          color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
+          horizontalAlignment: Text.AlignHCenter; width: parent.width
+        }
+
+        // Queued tracks
+        Repeater {
+          model: p.selectedTab === "queue" ? p.queueList : []
+          delegate: BorderSurface {
+            id: qRow
+            width: parent.width; implicitHeight: Style.space(32); radius: Style.cornerRadius
+            color: qRowMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent"
+            borderSpec: Border.none
+
+            MouseArea {
+              id: qRowMouse
+              anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                p.playUrl(modelData.url, modelData.title, modelData.artist)
+                p.removeFromQueue(index)
+              }
+            }
+
+            Row {
+              anchors.fill: parent; anchors.margins: Style.space(4); spacing: Style.space(6)
+
+              Text {
+                width: Style.space(18); horizontalAlignment: Text.AlignRight
+                anchors.verticalCenter: parent.verticalCenter
+                text: (index + 1) < 10 ? ("0" + (index + 1)) : String(index + 1)
+                color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8
+              }
+
+              // Thumbnail
+              BorderSurface {
+                width: Style.space(24); height: Style.space(24); radius: Style.space(3)
+                color: Qt.rgba(0.1, 0.1, 0.14, 0.9); borderSpec: Border.none
+                anchors.verticalCenter: parent.verticalCenter
+
+                Image {
+                  visible: modelData.thumb !== undefined && modelData.thumb !== ""
+                  anchors.fill: parent
+                  source: modelData.thumb ? "file://" + modelData.thumb : ""
+                  fillMode: Image.PreserveAspectCrop; sourceSize.width: 48; sourceSize.height: 48
+                }
+                Text {
+                  visible: !modelData.thumb
+                  anchors.centerIn: parent; text: "\uf001"; color: p.dim
+                  font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8
+                }
+              }
+
+              // Title & Artist
+              Column {
+                width: parent.width - Style.space(80); anchors.verticalCenter: parent.verticalCenter; spacing: 1
+
+                Text {
+                  width: parent.width; textFormat: Text.PlainText
+                  text: modelData.title || "Track"
+                  color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+                  elide: Text.ElideRight
+                }
+                Text {
+                  visible: modelData.artist !== ""
+                  width: parent.width; textFormat: Text.PlainText
+                  text: modelData.artist || ""
+                  color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.82
+                  elide: Text.ElideRight
+                }
+              }
+
+              // Remove button
+              BorderSurface {
+                z: 2
+                width: Style.space(20); height: Style.space(20); radius: Style.cornerRadius
+                color: qDelMouse.containsMouse ? Qt.rgba(1, 0, 0, 0.25) : "transparent"
+                borderSpec: Border.none
+                anchors.verticalCenter: parent.verticalCenter
+
+                Text {
+                  anchors.centerIn: parent; text: "\uf00d"
+                  color: qDelMouse.containsMouse ? p.urgent : p.dim
+                  font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.85
+                }
+                MouseArea {
+                  id: qDelMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                  onClicked: p.removeFromQueue(index)
+                }
+              }
             }
           }
         }

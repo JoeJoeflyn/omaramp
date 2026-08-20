@@ -49,6 +49,8 @@ Panel {
 
   property var historyList: []
   property var playlistsList: []
+  property var queueList: []
+  property int queueCount: 0
   property var searchResults: []
   property bool isSearching: false
   property string searchQuery: ""
@@ -244,7 +246,22 @@ Panel {
     if (!url || !url.trim()) return
     runCmd(["queue", url.trim(), title || "", artist || ""])
     root.urlInputText = ""
+    loadQueue()
     loadHistory()
+  }
+
+  function loadQueue() {
+    if (!queueProc.running) queueProc.running = true
+  }
+
+  function clearQueue() {
+    runCmd(["queue_clear"])
+    loadQueue()
+  }
+
+  function removeFromQueue(idx) {
+    runCmd(["queue_remove", String(idx)])
+    loadQueue()
   }
 
   function searchTracks(query) {
@@ -312,10 +329,10 @@ Panel {
         try {
           var data = JSON.parse(text || "{}")
           root.isRunning = data.running === true
-          root.playbackState = String(data.state || "stopped")
-          var newTrack = String(data.track || "No track loaded")
+          root.playbackState = data.state || "stopped"
+          var newTrack = String(data.track || "Omaramp")
           var newUrl = String(data.url || "")
-          var trackChanged = newTrack !== root.currentTrack
+          var trackChanged = (newTrack !== root.currentTrack) || (newUrl !== root.currentUrl)
           root.currentTrack = newTrack
           root.currentArtist = String(data.artist || "")
           root.currentUrl = newUrl
@@ -335,6 +352,7 @@ Panel {
           root.volumeDb = Number(data.volume_db || 0.0)
           root.shuffleMode = data.shuffle === true
           root.repeatMode = String(data.repeat || "off")
+          root.queueCount = (data.queue_count !== undefined) ? Number(data.queue_count) : 0
           root.eqText = String(data.eq || "Custom")
           if (data.audio_fx) root.audioFx = data.audio_fx
           if (data.resume && root.playbackState === "stopped") {
@@ -344,6 +362,18 @@ Panel {
             root.resumeVisible = false
           }
         } catch (e) {}
+      }
+    }
+  }
+
+  Process {
+    id: queueProc
+    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "queue_list"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try { root.queueList = JSON.parse(text || "[]") }
+        catch (e) { root.queueList = [] }
       }
     }
   }

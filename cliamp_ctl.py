@@ -20,10 +20,70 @@ CACHE_DIR = os.path.expanduser("~/.cache/omaramp")
 AUDIO_CACHE_DIR = os.path.join(CACHE_DIR, "audio")
 HISTORY_PATH = os.path.expanduser("~/.config/cliamp/history.toml")
 NOW_PLAYING_PATH = os.path.join(CACHE_DIR, "now_playing.json")
+QUEUE_PATH = os.path.join(CACHE_DIR, "queue.json")
 
 os.makedirs(AUDIO_CACHE_DIR, exist_ok=True)
 os.makedirs(os.path.expanduser("~/.config/cliamp"), exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
+
+def read_queue():
+    if os.path.exists(QUEUE_PATH):
+        try:
+            with open(QUEUE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+def save_queue(q_list):
+    try:
+        with open(QUEUE_PATH, "w", encoding="utf-8") as f:
+            json.dump(q_list, f, indent=2)
+    except Exception:
+        pass
+
+def add_to_queue(url, title=None, artist=None):
+    real_url, final_title, final_artist = resolve_track_url(url, title, artist)
+    if not real_url:
+        return {"success": False, "error": "Unable to resolve track"}
+    status = get_status()
+    if not status.get("running") or status.get("state") in ("stopped", "idle"):
+        return play_item(real_url, final_title, final_artist)
+    q = read_queue()
+    m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", real_url)
+    thumb = os.path.join(AUDIO_CACHE_DIR, f"{m.group(1)}.jpg") if m else ""
+    q.append({
+        "url": real_url,
+        "title": final_title,
+        "artist": final_artist,
+        "thumb": thumb
+    })
+    save_queue(q)
+    return {"success": True, "queue": q}
+
+def remove_from_queue(idx):
+    q = read_queue()
+    try:
+        i = int(idx)
+        if 0 <= i < len(q):
+            q.pop(i)
+            save_queue(q)
+            return {"success": True, "queue": q}
+    except Exception:
+        pass
+    return {"success": False}
+
+def clear_queue():
+    save_queue([])
+    return {"success": True}
+
+def play_next_in_queue():
+    q = read_queue()
+    if q:
+        next_track = q.pop(0)
+        save_queue(q)
+        return play_item(next_track["url"], next_track.get("title"), next_track.get("artist"))
+    return {"success": False, "error": "Queue empty"}
 
 def save_now_playing(title, artist, url="", pos=0):
     try:
@@ -423,6 +483,10 @@ def get_status():
         is_paused = pause_res.get("data") is True if pause_res else False
 
         if is_idle:
+            q = read_queue()
+            if q:
+                play_next_in_queue()
+                return get_status()
             state = "stopped"
         elif is_paused:
             state = "paused"
@@ -499,6 +563,7 @@ def get_status():
             "speed": round(float(speed_res.get("data") or 1.0), 2) if speed_res else 1.0,
             "shuffle": False,
             "repeat": "all",
+            "queue_count": len(read_queue()),
             "eq": cur_fx.get("eq", "Flat"),
             "audio_fx": cur_fx,
             "resume": resume
@@ -854,8 +919,12 @@ if __name__ == "__main__":
         send_mpv_cmd(["stop"])
         print(json.dumps({"success": True}))
     elif action == "next":
-        send_mpv_cmd(["playlist-next"])
-        print(json.dumps({"success": True}))
+        q = read_queue()
+        if q:
+            print(json.dumps(play_next_in_queue()))
+        else:
+            send_mpv_cmd(["playlist-next"])
+            print(json.dumps({"success": True}))
     elif action == "prev":
         send_mpv_cmd(["playlist-prev"])
         print(json.dumps({"success": True}))
@@ -872,11 +941,18 @@ if __name__ == "__main__":
         t = sys.argv[3] if len(sys.argv) > 3 else ""
         a = sys.argv[4] if len(sys.argv) > 4 else ""
         print(json.dumps(play_item(url, t, a)))
-    elif action == "queue":
+    elif action in ["queue", "queue_add"]:
         url = sys.argv[2] if len(sys.argv) > 2 else ""
         t = sys.argv[3] if len(sys.argv) > 3 else ""
         a = sys.argv[4] if len(sys.argv) > 4 else ""
-        print(json.dumps(queue_item(url, t, a)))
+        print(json.dumps(add_to_queue(url, t, a)))
+    elif action in ["queue_list", "get_queue"]:
+        print(json.dumps(read_queue()))
+    elif action == "queue_remove":
+        idx = sys.argv[2] if len(sys.argv) > 2 else "0"
+        print(json.dumps(remove_from_queue(idx)))
+    elif action == "queue_clear":
+        print(json.dumps(clear_queue()))
     elif action == "stop_daemon":
         print(json.dumps(stop_daemon()))
     elif action == "lyrics":
