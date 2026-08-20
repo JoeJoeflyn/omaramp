@@ -494,15 +494,34 @@ def get_status():
             "audio_fx": cur_fx
         }
 
+def resolve_spotify_url(url):
+    """Resolve Spotify track URL to title, artist, and search query using Spotify oEmbed."""
+    try:
+        if "spotify.com/track/" in url:
+            oembed_url = f"https://open.spotify.com/oembed?url={urllib.parse.quote(url)}"
+            req = urllib.request.Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
+            data = json.loads(urllib.request.urlopen(req, timeout=4.0).read().decode("utf-8"))
+            title = data.get("title", "").strip()
+            thumb = data.get("thumbnail_url", "")
+            return {"title": title, "artist": "", "thumb": thumb, "query": title}
+    except Exception:
+        pass
+    return None
+
 def search_tracks(query, limit=10):
     if not query or not query.strip():
         return []
+    q = query.strip()
+    if "spotify.com/track/" in q:
+        spot = resolve_spotify_url(q)
+        if spot and spot.get("query"):
+            q = spot["query"]
     cmd = [
         "yt-dlp",
         "--flat-playlist",
         "--print", "%(id)s\t%(title)s\t%(uploader)s\t%(duration_string)s",
         "--",
-        f"ytsearch{limit}:{query.strip()}"
+        f"ytsearch{limit}:{q}"
     ]
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=8.0)
@@ -668,6 +687,14 @@ def play_item(url, title=None, artist=None):
     start_mpv_daemon()
     final_title = title or "Track"
     final_artist = artist or ""
+    if "spotify.com/track/" in url:
+        spot = resolve_spotify_url(url)
+        if spot and spot.get("query"):
+            res = search_tracks(spot["query"], limit=1)
+            if res:
+                url = res[0]["url"]
+                final_title = spot.get("title") or res[0]["title"]
+                final_artist = spot.get("artist") or res[0]["artist"]
     record_history(final_title, final_artist, url, 0)
     save_now_playing(final_title, final_artist, url)
     if is_youtube_url(url):
@@ -685,6 +712,14 @@ def queue_item(url, title=None, artist=None):
     start_mpv_daemon()
     final_title = title or "Track"
     final_artist = artist or ""
+    if "spotify.com/track/" in url:
+        spot = resolve_spotify_url(url)
+        if spot and spot.get("query"):
+            res = search_tracks(spot["query"], limit=1)
+            if res:
+                url = res[0]["url"]
+                final_title = spot.get("title") or res[0]["title"]
+                final_artist = spot.get("artist") or res[0]["artist"]
     record_history(final_title, final_artist, url, 0)
     if is_youtube_url(url):
         save_youtube_meta(url, final_title, final_artist)

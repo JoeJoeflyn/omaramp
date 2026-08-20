@@ -25,7 +25,7 @@ Inspired by Winamp & [cliamp](https://github.com/brianstrauch/cliamp).
 - **Streaming & YouTube Integration**:
   - Instant YouTube track search with auto-thumbnail prefetching.
   - FIFO streaming audio playback (no disk download needed).
-  - YouTube & Spotify playlist importer.
+  - Direct Spotify track links (`open.spotify.com/track/...`) and playlist/album importer.
 - **Full Transport Deck**: Play/Pause, Next, Prev, Stop, Shuffle, Repeat, Volume slider, and Speed controls (0.5x–2.0x).
 - **Keyboard Shortcuts**: `Space` (play/pause), `Left`/`Right` (seek), `Up`/`Down` (volume), `/` (search), `m` (mute), `Esc` (close).
 - **Zero-Overhead Idle**: Sub-process sleep and lightweight PipeWire monitoring when paused or closed.
