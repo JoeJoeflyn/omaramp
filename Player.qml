@@ -223,76 +223,103 @@ Item {
           Item {
             id: titleClip
             width: parent.width
-            implicitHeight: titleText.implicitHeight
+            implicitHeight: titleText1.implicitHeight
             clip: true
 
-            Text {
-              id: titleText
-              textFormat: Text.PlainText
-              text: {
-                if (!p.isRunning) return "Daemon idle — click play to start"
-                return p.currentTrack || "No track loaded"
-              }
-              color: p.isPlaying ? Color.accent : p.foreground
-              font.family: p.fontFamily; font.pixelSize: Style.font.bodySmall
-              font.bold: true
+            readonly property string fullTitle: {
+              if (!p.isRunning) return "Daemon idle — click play to start"
+              return p.currentTrack || "No track loaded"
+            }
 
-              readonly property bool needsScroll: implicitWidth > titleClip.width
+            Item {
+              id: titleScroller
+              height: parent.height
+              width: titleText1.implicitWidth + (titleText1.implicitWidth > titleClip.width ? Style.space(40) + titleText2.implicitWidth : 0)
 
-              SequentialAnimation on x {
-                running: titleText.needsScroll && p.isPlaying
+              readonly property bool needsScroll: titleText1.implicitWidth > titleClip.width
+              readonly property real loopDistance: titleText1.implicitWidth + Style.space(40)
+
+              NumberAnimation on x {
+                running: titleScroller.needsScroll && p.isPlaying
                 loops: Animation.Infinite
-                PauseAnimation { duration: 2500 }
-                NumberAnimation {
-                  to: -(titleText.implicitWidth - titleClip.width)
-                  duration: Math.max(1200, (titleText.implicitWidth - titleClip.width) * 35)
-                  easing.type: Easing.Linear
+                from: 0
+                to: -titleScroller.loopDistance
+                duration: Math.max(2500, titleScroller.loopDistance * 32)
+              }
+
+              Row {
+                spacing: Style.space(40)
+
+                Text {
+                  id: titleText1
+                  textFormat: Text.PlainText
+                  text: titleClip.fullTitle
+                  color: p.isPlaying ? Color.accent : p.foreground
+                  font.family: p.fontFamily; font.pixelSize: Style.font.bodySmall
+                  font.bold: true
                 }
-                PauseAnimation { duration: 2500 }
-                NumberAnimation {
-                  to: 0
-                  duration: 600
-                  easing.type: Easing.InOutQuad
+
+                Text {
+                  id: titleText2
+                  visible: titleScroller.needsScroll
+                  textFormat: Text.PlainText
+                  text: titleClip.fullTitle
+                  color: p.isPlaying ? Color.accent : p.foreground
+                  font.family: p.fontFamily; font.pixelSize: Style.font.bodySmall
+                  font.bold: true
                 }
               }
 
-              onTextChanged: x = 0
+              onNeedsScrollChanged: { if (!needsScroll) x = 0 }
             }
           }
 
           Item {
             id: artistClip
             width: parent.width
-            implicitHeight: artistText.implicitHeight
+            implicitHeight: artistText1.implicitHeight
             clip: true
 
-            Text {
-              id: artistText
-              textFormat: Text.PlainText
-              text: p.currentArtist ? p.currentArtist : (p.isRunning ? "cliamp playback" : "omarchy audio")
-              color: p.dim
-              font.family: p.fontFamily; font.pixelSize: Style.font.caption
+            readonly property string fullArtist: p.currentArtist ? p.currentArtist : (p.isRunning ? "cliamp playback" : "omarchy audio")
 
-              readonly property bool needsScroll: implicitWidth > artistClip.width
+            Item {
+              id: artistScroller
+              height: parent.height
+              width: artistText1.implicitWidth + (artistText1.implicitWidth > artistClip.width ? Style.space(40) + artistText2.implicitWidth : 0)
 
-              SequentialAnimation on x {
-                running: artistText.needsScroll && p.isPlaying
+              readonly property bool needsScroll: artistText1.implicitWidth > artistClip.width
+              readonly property real loopDistance: artistText1.implicitWidth + Style.space(40)
+
+              NumberAnimation on x {
+                running: artistScroller.needsScroll && p.isPlaying
                 loops: Animation.Infinite
-                PauseAnimation { duration: 3000 }
-                NumberAnimation {
-                  to: -(artistText.implicitWidth - artistClip.width)
-                  duration: Math.max(1000, (artistText.implicitWidth - artistClip.width) * 35)
-                  easing.type: Easing.Linear
+                from: 0
+                to: -artistScroller.loopDistance
+                duration: Math.max(2500, artistScroller.loopDistance * 35)
+              }
+
+              Row {
+                spacing: Style.space(40)
+
+                Text {
+                  id: artistText1
+                  textFormat: Text.PlainText
+                  text: artistClip.fullArtist
+                  color: p.dim
+                  font.family: p.fontFamily; font.pixelSize: Style.font.caption
                 }
-                PauseAnimation { duration: 3000 }
-                NumberAnimation {
-                  to: 0
-                  duration: 600
-                  easing.type: Easing.InOutQuad
+
+                Text {
+                  id: artistText2
+                  visible: artistScroller.needsScroll
+                  textFormat: Text.PlainText
+                  text: artistClip.fullArtist
+                  color: p.dim
+                  font.family: p.fontFamily; font.pixelSize: Style.font.caption
                 }
               }
 
-              onTextChanged: x = 0
+              onNeedsScrollChanged: { if (!needsScroll) x = 0 }
             }
           }
         }
