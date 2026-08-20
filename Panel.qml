@@ -55,7 +55,7 @@ Panel {
   property string loadingVid: ""
   property string selectedTab: "history"
   property string urlInputText: ""
-  property string visMode: "scrubber_wave"
+  property string visMode: "siriwave"
   property bool visPickerOpen: false
   property bool eqPickerOpen: false
   property var visModes: ["bars", "bars_dot", "bars_outline", "bricks", "columns", "classic_led", "peaks", "wave", "scope", "heartbeat", "sine", "siriwave", "scrubber_wave", "retro", "scatter", "flame", "pulse", "matrix", "binary", "butterfly", "sakura", "firework", "bubbles", "rain", "terrain", "logo", "firefly", "geyser", "mosaic", "sand", "stereo", "ascii"]
