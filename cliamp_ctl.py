@@ -498,6 +498,7 @@ def get_status():
             if np.get("url"):
                 save_now_playing(track, artist, np.get("url", ""), int(cur_s))
 
+        resume = {"title": np.get("title", ""), "artist": np.get("artist", ""), "url": np.get("url", ""), "pos": np.get("pos", 0)} if np.get("url") else None
         cur_fx = get_audio_fx()
         return {
             "running": True,
@@ -522,12 +523,15 @@ def get_status():
             "resume": resume
         }
     except Exception as e:
+        cur_fx = get_audio_fx()
         return {
             "running": False,
             "state": "stopped",
             "error": str(e),
-            "track": "Omaramp",
-            "artist": "",
+            "track": "No track loaded",
+            "artist": "Omaramp",
+            "art_path": "",
+            "art_color": "",
             "time_current": "00:00",
             "time_total": "00:00",
             "cur_secs": 0,
@@ -537,7 +541,8 @@ def get_status():
             "volume_pct": 80,
             "shuffle": False,
             "repeat": "off",
-            "eq": "Custom"
+            "eq": cur_fx.get("eq", "Flat"),
+            "audio_fx": cur_fx
         }
 
 def search_tracks(query, limit=10):
