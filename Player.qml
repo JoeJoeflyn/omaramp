@@ -373,53 +373,40 @@ Item {
         }
       }
 
-      // Visualizer Canvas Frame with Vibrant Chromatic Aurora
+      // Visualizer Canvas Frame — Vivid Neon Color Backdrop
       BorderSurface {
         width: parent.width
         height: Style.space(52)
         radius: Style.space(4)
         clip: true
-        color: "#080a0f"
-        borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.45 + root.beatDropPulse * 0.40) : Qt.rgba(1, 1, 1, 0.12), 1)
+        color: Qt.rgba(p.dynamicAccent.r * 0.15, p.dynamicAccent.g * 0.10, p.dynamicAccent.b * 0.18, 1.0)
+        borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.65 + root.beatDropPulse * 0.35) : Qt.rgba(1, 1, 1, 0.15), 1)
 
-        // 1. Deep Vibrant Multi-Stop Aurora Gradient
+        // 1. Full-bleed vibrant gradient wash — NOT subtle, actually visible
         Rectangle {
-          anchors.fill: parent
-          z: 0
+          anchors.fill: parent; z: 0
           gradient: Gradient {
-            orientation: Gradient.Vertical
-            GradientStop {
-              position: 0.0
-              color: Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, p.isPlaying ? (0.35 + root.beatDropPulse * 0.25) : 0.08)
-            }
-            GradientStop {
-              position: 0.50
-              color: Qt.rgba(0.04, 0.05, 0.09, 0.85)
-            }
-            GradientStop {
-              position: 1.0
-              color: Qt.rgba(p.dynamicAccent.b * 0.9, p.dynamicAccent.r * 0.6 + 0.1, p.dynamicAccent.g * 0.8, p.isPlaying ? (0.30 + root.beatDropPulse * 0.20) : 0.06)
-            }
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0;  color: Qt.rgba(p.dynamicAccent.r * 0.9, p.dynamicAccent.g * 0.3, p.dynamicAccent.b * 0.8, p.isPlaying ? 0.65 : 0.15) }
+            GradientStop { position: 0.5;  color: Qt.rgba(p.dynamicAccent.r * 0.12, p.dynamicAccent.g * 0.10, p.dynamicAccent.b * 0.15, 0.90) }
+            GradientStop { position: 1.0;  color: Qt.rgba(p.dynamicAccent.b * 0.7, p.dynamicAccent.r * 0.5, p.dynamicAccent.g * 0.9, p.isPlaying ? 0.60 : 0.12) }
           }
         }
 
-        // 2. Central Radiant Neon Glow (Pulses with live kicks and sound energy)
+        // 2. Hot center neon bloom — big, bright, breathing with kicks
         Rectangle {
-          anchors.centerIn: parent
-          width: parent.width * 0.80
-          height: parent.height * 0.90
-          radius: height / 2
+          anchors.centerIn: parent; z: 1
+          width: parent.width * 0.55; height: parent.height * 1.2
+          radius: width / 2
           color: p.dynamicAccent
-          opacity: p.isPlaying ? (0.22 + root.beatDropPulse * 0.30) : 0.02
-          z: 1
+          opacity: p.isPlaying ? (0.40 + root.beatDropPulse * 0.35) : 0.05
         }
 
-        // 3. Crisp Glass Prism Top Shimmer
+        // 3. Top edge highlight
         Rectangle {
           anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
-          height: 1
-          color: Qt.rgba(1, 1, 1, 0.25)
-          z: 2
+          height: 1; z: 2
+          color: Qt.rgba(1, 1, 1, 0.30)
         }
 
         Canvas {
