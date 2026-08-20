@@ -36,6 +36,10 @@ import "visualizers/sine.js" as VisSine
 import "visualizers/siriwave.js" as VisSiriWave
 import "visualizers/soundcloud_wave.js" as VisSoundCloudWave
 import "visualizers/telegram_wave.js" as VisTelegramWave
+import "visualizers/daw_wave.js" as VisDAWWave
+import "visualizers/led_scrubber.js" as VisLEDScrubber
+import "visualizers/heatmap_wave.js" as VisHeatmapWave
+import "visualizers/grounded_wave.js" as VisGroundedWave
 
 // HUD header + visualizer canvas + seek bar
 Item {
@@ -119,7 +123,9 @@ Item {
     "geyser": VisGeyser.render, "mosaic": VisMosaic.render, "sand": VisSand.render,
     "stereo": VisStereo.render, "ascii": VisAscii.render, "sine": VisSine.render,
     "siriwave": VisSiriWave.render, "soundcloud_wave": VisSoundCloudWave.render,
-    "telegram_wave": VisTelegramWave.render
+    "telegram_wave": VisTelegramWave.render, "daw_wave": VisDAWWave.render,
+    "led_scrubber": VisLEDScrubber.render, "heatmap_wave": VisHeatmapWave.render,
+    "grounded_wave": VisGroundedWave.render
   })
 
   readonly property var _modeLabels: ({
@@ -134,7 +140,9 @@ Item {
     "geyser": "Geyser", "mosaic": "Mosaic", "sand": "Sand",
     "stereo": "Stereo", "ascii": "Ascii", "sine": "Sine Wave",
     "siriwave": "Siri Wave", "soundcloud_wave": "SoundCloud Wave",
-    "telegram_wave": "Telegram Wave"
+    "telegram_wave": "Telegram Wave", "daw_wave": "DAW Peak Wave",
+    "led_scrubber": "LED Scrubber", "heatmap_wave": "Heatmap Wave",
+    "grounded_wave": "Baseline Wave"
   })
 
   function requestPaint() { if (visCanvas) visCanvas.requestPaint() }
