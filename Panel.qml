@@ -30,6 +30,9 @@ Panel {
   property string currentArtist: ""
   property string currentUrl: ""
   property string artPath: ""
+  property string artColor: ""
+  property color dynamicAccent: (artColor !== "" && isPlaying) ? artColor : Color.accent
+  Behavior on dynamicAccent { ColorAnimation { duration: 500; easing.type: Easing.InOutQuad } }
   property string timeCurrent: "00:00"
   property string timeTotal: "00:00"
   property int curSecs: 0
@@ -239,6 +242,7 @@ Panel {
           root.currentArtist = String(data.artist || "")
           root.currentUrl = newUrl
           root.artPath = String(data.art_path || "")
+          root.artColor = String(data.art_color || "")
           if (trackChanged && playerComp.lyricsVisible && playerComp.lyricsTrack !== newTrack) {
             playerComp.fetchLyrics()
           }

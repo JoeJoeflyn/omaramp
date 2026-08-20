@@ -196,6 +196,59 @@ def set_eq(preset_name):
         pass
     return {"success": True, "preset": preset_name}
 
+def get_dominant_color(img_path):
+    if not img_path or not os.path.exists(img_path):
+        return ""
+    color_file = img_path + ".color"
+    if os.path.exists(color_file):
+        try:
+            with open(color_file, "r") as f:
+                c = f.read().strip()
+                if c.startswith("#") and len(c) == 7:
+                    return c
+        except Exception:
+            pass
+
+    try:
+        cmd = ["magick", img_path, "-resize", "32x32!", "-colors", "8", "-format", "%c", "histogram:info:"]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=1.0)
+        lines = res.stdout.splitlines()
+        best_color = ""
+        best_score = -1
+        for line in lines:
+            m = re.search(r"#([0-9A-Fa-f]{6})", line)
+            count_m = re.search(r"^\s*(\d+):", line)
+            if m and count_m:
+                hex_c = "#" + m.group(1).upper()
+                count = int(count_m.group(1))
+                r = int(hex_c[1:3], 16)
+                g = int(hex_c[3:5], 16)
+                b = int(hex_c[5:7], 16)
+                max_c = max(r, g, b)
+                min_c = min(r, g, b)
+                sat = (max_c - min_c) / max(1, max_c)
+                brightness = max_c / 255.0
+                if brightness > 0.2 and brightness < 0.95:
+                    score = count * (1.0 + sat * 3.0)
+                    if score > best_score:
+                        best_score = score
+                        best_color = hex_c
+        if not best_color:
+            res = subprocess.run(["magick", img_path, "-scale", "1x1!", "-format", "#%[hex:u.p{0,0}]", "info:"], capture_output=True, text=True, timeout=1.0)
+            avg = res.stdout.strip()[:7]
+            if avg.startswith("#") and len(avg) == 7:
+                best_color = avg.upper()
+        if best_color:
+            try:
+                with open(color_file, "w") as f:
+                    f.write(best_color)
+            except Exception:
+                pass
+            return best_color
+    except Exception:
+        pass
+    return ""
+
 def get_status():
     cur_eq = get_current_eq()
     if not is_mpv_running():
@@ -204,6 +257,8 @@ def get_status():
             "state": "stopped",
             "track": "No track loaded",
             "artist": "Omaramp",
+            "art_path": "",
+            "art_color": "",
             "time_current": "00:00",
             "time_total": "00:00",
             "cur_secs": 0,
@@ -294,6 +349,7 @@ def get_status():
             "track": track,
             "artist": artist,
             "art_path": art_path,
+            "art_color": get_dominant_color(art_path),
             "url": np.get("url", ""),
             "time_current": format_seconds(cur_s),
             "time_total": format_seconds(tot_s),
