@@ -18,49 +18,73 @@ Column {
     spacing: Style.space(4)
 
     BorderSurface {
+      id: searchBox
       width: parent.width - Style.space(36)
       implicitHeight: Style.space(26)
       radius: Style.cornerRadius
       color: Color.popups.background
       borderSpec: Border.controlSpec(urlInput.activeFocus ? "focused" : "normal", p.foreground, Color.accent)
+      clip: true
 
-      Row {
-        anchors.fill: parent; anchors.margins: Style.space(4); spacing: Style.space(4)
+      Item {
+        anchors.fill: parent
+        anchors.leftMargin: Style.space(6)
+        anchors.rightMargin: Style.space(6)
 
         Text {
+          id: searchIcon
+          anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
-          text: "\uf002"; color: p.dim
-          font.family: p.fontFamily; font.pixelSize: Style.font.caption
+          text: "\uf002"
+          color: p.dim
+          font.family: p.fontFamily
+          font.pixelSize: Style.font.caption
         }
 
         TextInput {
           id: urlInput
-          width: parent.width - Style.space(32)
+          anchors.left: searchIcon.right
+          anchors.leftMargin: Style.space(6)
+          anchors.right: clearBtn.visible ? clearBtn.left : parent.right
+          anchors.rightMargin: clearBtn.visible ? Style.space(4) : 0
           anchors.verticalCenter: parent.verticalCenter
           text: p.urlInputText
           onTextChanged: p.urlInputText = text
           color: p.foreground
-          font.family: p.fontFamily; font.pixelSize: Style.font.caption
+          font.family: p.fontFamily
+          font.pixelSize: Style.font.caption
           selectByMouse: true
+          clip: true
           onAccepted: p.searchTracks(text)
 
           Text {
             visible: !urlInput.text && !urlInput.activeFocus
             text: "Search songs, artists, or paste URL..."
-            color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
-            anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left
+            color: p.dim
+            font.family: p.fontFamily
+            font.pixelSize: Style.font.caption
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            elide: Text.ElideRight
           }
         }
 
         Text {
+          id: clearBtn
           visible: urlInput.text.length > 0
+          anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           text: "\uf00d"
           color: clearMouse.containsMouse ? Color.accent : p.dim
-          font.family: p.fontFamily; font.pixelSize: Style.font.caption
+          font.family: p.fontFamily
+          font.pixelSize: Style.font.caption
 
           MouseArea {
-            id: clearMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+            id: clearMouse
+            anchors.fill: parent
+            anchors.margins: -4
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
             onClicked: { urlInput.text = ""; p.clearSearch() }
           }
         }
