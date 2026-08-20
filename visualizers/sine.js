@@ -1,4 +1,4 @@
-// Sine — Multi-frequency Harmonic Sine Ribbon Visualizer
+// Sine — Live FFT-Displaced Multi-Harmonic Sine Wave Ribbon
 .pragma library
 .import "helpers.js" as H
 
@@ -7,13 +7,15 @@ function render(ctx, d) {
   var w = d.width, h = d.height, frame = d.frame || 0
   var isPlaying = d.playing
   var midY = h / 2.0
+  var nBands = bands.length || 24
 
   var bass = H.bandAvg(bands, 0, 4)
   var mids = H.bandAvg(bands, 4, 12)
   var highs = H.bandAvg(bands, 12, 24)
+  var beatDrop = d.beatDrop || 0
 
   var acc = d.accent
-  var ar = 100, ag = 170, ab = 255
+  var ar = 100, ag = 180, ab = 255
   if (acc) {
     if (typeof acc === "string" && acc.charAt(0) === "#" && acc.length === 7) {
       ar = parseInt(acc.substr(1, 2), 16)
@@ -26,27 +28,62 @@ function render(ctx, d) {
     }
   }
 
-  var t = frame * 0.04
-  var waves = [
-    { freq: 0.015, speed: 1.0, amp: isPlaying ? (4.0 + bass * (h * 0.40)) : 2.0, col: "rgba(" + ar + "," + ag + "," + ab + ", 0.85)", width: 2.2 },
-    { freq: 0.028, speed: -1.4, amp: isPlaying ? (3.0 + mids * (h * 0.32)) : 1.5, col: "rgba(" + Math.min(255, ar + 40) + "," + Math.min(255, ag + 30) + ", 255, 0.70)", width: 1.8 },
-    { freq: 0.045, speed: 2.0, amp: isPlaying ? (2.0 + highs * (h * 0.24)) : 1.0, col: "rgba(255, 225, 130, 0.60)", width: 1.4 }
+  var t = frame * 0.05
+
+  // 3 Harmonic Ribbons directly driven by real audio FFT bands + Beat Drop Energy
+  var ribbons = [
+    {
+      freq: 0.022, speed: 1.0, width: 2.5,
+      gain: isPlaying ? (12.0 + bass * (h * 0.45) + beatDrop * 10.0) : 1.0,
+      col: "rgba(" + ar + "," + ag + "," + ab + ", 0.90)",
+      fillCol: "rgba(" + ar + "," + ag + "," + ab + ", 0.12)"
+    },
+    {
+      freq: 0.038, speed: -1.4, width: 1.8,
+      gain: isPlaying ? (8.0 + mids * (h * 0.38)) : 1.0,
+      col: "rgba(" + Math.min(255, ar + 50) + "," + Math.min(255, ag + 40) + ", 255, 0.75)",
+      fillCol: "rgba(" + Math.min(255, ar + 50) + "," + Math.min(255, ag + 40) + ", 255, 0.08)"
+    },
+    {
+      freq: 0.055, speed: 2.2, width: 1.4,
+      gain: isPlaying ? (6.0 + highs * (h * 0.30)) : 0.8,
+      col: "rgba(255, 230, 140, 0.65)",
+      fillCol: "rgba(255, 230, 140, 0.05)"
+    }
   ]
 
-  for (var wi = 0; wi < waves.length; wi++) {
-    var wv = waves[wi]
+  for (var ri = 0; ri < ribbons.length; ri++) {
+    var rb = ribbons[ri]
     ctx.beginPath()
-    ctx.lineWidth = wv.width
-    ctx.strokeStyle = wv.col
+    ctx.moveTo(0, midY)
 
-    for (var x = 0; x <= w; x += 3) {
-      // Gaussian window to taper wave gracefully at left and right borders
+    for (var x = 0; x <= w; x += 2) {
+      // Map x position directly to actual frequency band (Left = Bass, Right = Highs)
+      var bIdx = Math.min(nBands - 1, Math.floor((x / w) * nBands))
+      var bandEnergy = isPlaying ? (bands[bIdx] || 0) : 0.05
+
+      // Natural edge windowing
       var normX = (x / w) * 2.0 - 1.0
-      var envelope = Math.exp(-normX * normX * 3.0)
-      var y = midY + Math.sin(x * wv.freq + t * wv.speed) * wv.amp * envelope
-      if (x === 0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
+      var windowEdge = Math.max(0.0, 1.0 - Math.pow(Math.abs(normX), 3.0))
+
+      // Sinusoidal carrier + direct audio FFT displacement
+      var carrier = Math.sin(x * rb.freq + t * rb.speed)
+      var audioDisplacement = (bandEnergy * rb.gain) * carrier
+      var y = midY - audioDisplacement * windowEdge
+
+      ctx.lineTo(x, y)
     }
+
+    ctx.lineWidth = rb.width
+    ctx.strokeStyle = rb.col
     ctx.stroke()
   }
+
+  // Draw subtle center baseline
+  ctx.lineWidth = 1.0
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)"
+  ctx.beginPath()
+  ctx.moveTo(0, midY)
+  ctx.lineTo(w, midY)
+  ctx.stroke()
 }

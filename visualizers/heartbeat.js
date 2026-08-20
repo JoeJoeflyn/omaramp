@@ -19,15 +19,14 @@ function render(ctx, d) {
   var beatDrop = d.beatDrop || 0
   var n = wave.length
 
-  // Calculate current pulse sample
-  var sampleVal = 0
-  if (isPlaying && n > 0) {
-    var rawSample = wave[Math.floor((frame * 4) % n)] || 0
-    // Inject QRS cardiac spike when bass/kick hits
-    var qrs = (beatDrop > 0.3 || bass > 0.45) ? Math.sin(frame * 0.8) * (h * 0.42) : 0
-    sampleVal = midY - (rawSample * (h * 0.30)) - qrs
-  } else {
-    sampleVal = midY
+  // Calculate current pulse sample directly from audio signal
+  var sampleVal = midY
+  if (isPlaying) {
+    var rawSample = (n > 0) ? (wave[s.ecgHead % n] || 0) : 0
+    var kickAmp = (bass * (h * 0.46)) + (beatDrop * (h * 0.35))
+    // Cardiac QRS spike triggered by live bass kicks and audio waveform
+    var cardiac = Math.sin(frame * 0.5) * kickAmp + rawSample * (h * 0.25)
+    sampleVal = Math.max(2, Math.min(h - 3, midY - cardiac))
   }
 
   // Advance sweep head smoothly across monitor (2.0 px per frame = ~1.5s sweep)
