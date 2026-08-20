@@ -64,10 +64,84 @@ BorderSurface {
       }
     }
 
+    // Audio FX toggles: Normalizer & 3D Spatial Audio
+    Row {
+      width: parent.width
+      spacing: Style.space(6)
+
+      Rectangle {
+        id: loudnormBtn
+        readonly property bool active: p && p.audioFx && p.audioFx.loudnorm
+        width: (parent.width - Style.space(6)) / 2
+        height: Style.space(24)
+        radius: Style.space(4)
+        color: active ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.2) : (loudMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0.1, 0.1, 0.14, 0.8))
+        border.width: 1
+        border.color: active ? Color.accent : (loudMouse.containsMouse ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.3) : "transparent")
+
+        Row {
+          anchors.centerIn: parent
+          spacing: Style.space(4)
+          Text {
+            text: "\uf028"
+            color: loudnormBtn.active ? Color.accent : (p ? p.dim : "#888")
+            font.family: p ? p.fontFamily : "sans-serif"; font.pixelSize: Style.font.caption * 0.8
+            anchors.verticalCenter: parent.verticalCenter
+          }
+          Text {
+            text: "Normalizer"
+            color: loudnormBtn.active ? Color.accent : (p ? p.foreground : "#fff")
+            font.family: p ? p.fontFamily : "sans-serif"; font.pixelSize: Style.font.caption * 0.8
+            font.bold: loudnormBtn.active
+            anchors.verticalCenter: parent.verticalCenter
+          }
+        }
+
+        MouseArea {
+          id: loudMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+          onClicked: if (p) p.toggleLoudnorm()
+        }
+      }
+
+      Rectangle {
+        id: spatialBtn
+        readonly property bool active: p && p.audioFx && p.audioFx.spatial
+        width: (parent.width - Style.space(6)) / 2
+        height: Style.space(24)
+        radius: Style.space(4)
+        color: active ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.2) : (spatialMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0.1, 0.1, 0.14, 0.8))
+        border.width: 1
+        border.color: active ? Color.accent : (spatialMouse.containsMouse ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.3) : "transparent")
+
+        Row {
+          anchors.centerIn: parent
+          spacing: Style.space(4)
+          Text {
+            text: "\uf025"
+            color: spatialBtn.active ? Color.accent : (p ? p.dim : "#888")
+            font.family: p ? p.fontFamily : "sans-serif"; font.pixelSize: Style.font.caption * 0.8
+            anchors.verticalCenter: parent.verticalCenter
+          }
+          Text {
+            text: "3D Spatial"
+            color: spatialBtn.active ? Color.accent : (p ? p.foreground : "#fff")
+            font.family: p ? p.fontFamily : "sans-serif"; font.pixelSize: Style.font.caption * 0.8
+            font.bold: spatialBtn.active
+            anchors.verticalCenter: parent.verticalCenter
+          }
+        }
+
+        MouseArea {
+          id: spatialMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+          onClicked: if (p) p.toggleSpatial()
+        }
+      }
+    }
+
     // Scrollable preset list
     Flickable {
       width: parent.width
-      height: parent.height - Style.space(26)
+      height: parent.height - Style.space(56)
       contentWidth: width; contentHeight: presetCol.implicitHeight
       clip: true; boundsBehavior: Flickable.StopAtBounds
       ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }

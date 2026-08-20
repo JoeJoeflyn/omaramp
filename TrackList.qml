@@ -344,7 +344,13 @@ Column {
 
           MouseArea {
             id: plMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-            onClicked: { if (modelData.name) p.loadPlaylist(modelData.name) }
+            onClicked: {
+              if (modelData.tracks && modelData.tracks.length > 0) {
+                p.playPlaylist(modelData)
+              } else if (modelData.name) {
+                p.loadPlaylist(modelData.name)
+              }
+            }
           }
         }
       }

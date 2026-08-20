@@ -90,6 +90,8 @@ def start_mpv_daemon():
             "--ytdl-format=bestaudio/best",
             "--ytdl-raw-options=extractor-args=youtube:player_client=mweb",
             f"--input-ipc-server={SOCK_PATH}",
+            "--title=Omaramp",
+            "--script-opts=mpris-identity=Omaramp",
             "--keep-open=yes",
             "--volume=80"
         ]
@@ -98,6 +100,7 @@ def start_mpv_daemon():
             time.sleep(0.1)
             if os.path.exists(SOCK_PATH):
                 break
+        apply_audio_fx()
 
 def record_history(title, artist, url, dur):
     try:
@@ -147,6 +150,105 @@ def parse_history(limit=30):
     except Exception:
         return []
 
+PLAYLISTS_FILE = os.path.join(CACHE_DIR, "playlists.json")
+
+def parse_playlists():
+    if os.path.exists(PLAYLISTS_FILE):
+        try:
+            with open(PLAYLISTS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+def save_playlists(pl_list):
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(PLAYLISTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(pl_list, f, indent=2)
+    except Exception:
+        pass
+
+def import_playlist(url, custom_name=None):
+    if not url or not is_safe_url(url):
+        return {"success": False, "error": "Invalid or unsafe URL"}
+
+    tracks = []
+    pl_name = (custom_name or "").strip()
+
+    # 1. YouTube Playlist
+    if "list=" in url or "youtube.com" in url or "youtu.be" in url:
+        try:
+            if not pl_name:
+                t_cmd = ["yt-dlp", "--flat-playlist", "--print", "%(playlist_title)s", "--playlist-items", "1", url]
+                t_res = subprocess.run(t_cmd, capture_output=True, text=True, timeout=6.0)
+                pl_name = t_res.stdout.strip().splitlines()[0] if t_res.stdout.strip() else ""
+            
+            cmd = [
+                "yt-dlp",
+                "--flat-playlist",
+                "--max-downloads", "50",
+                "--print", "%(id)s\t%(title)s\t%(uploader)s\t%(duration_string)s",
+                url
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=12.0)
+            for line in (res.stdout or "").splitlines():
+                parts = line.split("\t")
+                if len(parts) >= 2 and parts[0]:
+                    vid = parts[0].strip()
+                    t = parts[1].strip() if len(parts) > 1 else "Track"
+                    a = parts[2].strip() if len(parts) > 2 else ""
+                    d = parts[3].strip() if len(parts) > 3 else ""
+                    tracks.append({
+                        "id": vid,
+                        "title": t,
+                        "artist": a,
+                        "duration": d,
+                        "url": f"https://www.youtube.com/watch?v={vid}"
+                    })
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # 2. Spotify Playlist / Album
+    elif "spotify.com" in url:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+            html = urllib.request.urlopen(req, timeout=6.0).read().decode("utf-8")
+            if not pl_name:
+                title_m = re.search(r"<title>(.*?)(?: - playlist by| \| Spotify)</title>", html)
+                pl_name = title_m.group(1).strip() if title_m else "Spotify Playlist"
+            
+            for m in re.finditer(r"itemprop=\"name\" content=\"([^\"]+)\".*?itemprop=\"description\" content=\"([^\"]+)\"", html):
+                t = m.group(1).strip()
+                a = m.group(2).strip()
+                tracks.append({
+                    "id": "",
+                    "title": t,
+                    "artist": a,
+                    "duration": "",
+                    "url": f"{t} {a}"
+                })
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    if not tracks:
+        return {"success": False, "error": "No tracks found in playlist URL"}
+
+    pl_name = pl_name or f"Imported Playlist ({len(tracks)})"
+
+    playlists = parse_playlists()
+    existing = False
+    for pl in playlists:
+        if pl.get("name") == pl_name:
+            pl["tracks"] = tracks
+            existing = True
+            break
+    if not existing:
+        playlists.append({"name": pl_name, "tracks": tracks})
+    
+    save_playlists(playlists)
+    return {"success": True, "name": pl_name, "count": len(tracks)}
+
 def format_seconds(secs):
     if not secs or secs < 0:
         return "00:00"
@@ -178,23 +280,78 @@ def get_current_eq():
             pass
     return "Flat"
 
-def set_eq(preset_name):
-    if preset_name not in EQ_PRESETS:
-        preset_name = "Flat"
-    gains = EQ_PRESETS[preset_name]
-    if preset_name == "Flat":
-        send_mpv_cmd(["set_property", "af", ""])
-    else:
-        parts = [f"equalizer=f={f}:width_type=o:width=1:gain={g}" for f, g in zip(EQ_FREQS, gains)]
-        filter_str = "lavfi=[" + ",".join(parts) + "]"
-        send_mpv_cmd(["set_property", "af", filter_str])
+AUDIO_FX_FILE = os.path.join(CACHE_DIR, "audio_fx.json")
+
+def get_audio_fx():
+    default_fx = {
+        "eq": get_current_eq(),
+        "loudnorm": False,
+        "spatial": False
+    }
+    if os.path.exists(AUDIO_FX_FILE):
+        try:
+            with open(AUDIO_FX_FILE, "r") as f:
+                d = json.load(f)
+                default_fx["eq"] = d.get("eq", get_current_eq())
+                default_fx["loudnorm"] = d.get("loudnorm", False)
+                default_fx["spatial"] = d.get("spatial", False)
+        except Exception:
+            pass
+    return default_fx
+
+def save_audio_fx(fx_dict):
     try:
         os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(EQ_CACHE_FILE, "w") as f:
-            json.dump({"preset": preset_name}, f)
-    except:
+        with open(AUDIO_FX_FILE, "w") as f:
+            json.dump(fx_dict, f)
+    except Exception:
         pass
-    return {"success": True, "preset": preset_name}
+
+def apply_audio_fx(preset_name=None, loudnorm=None, spatial=None):
+    cur = get_audio_fx()
+    if preset_name is not None:
+        cur["eq"] = preset_name if preset_name in EQ_PRESETS else "Flat"
+        try:
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            with open(EQ_CACHE_FILE, "w") as f:
+                json.dump({"preset": cur["eq"]}, f)
+        except Exception:
+            pass
+    if loudnorm is not None:
+        cur["loudnorm"] = bool(loudnorm)
+    if spatial is not None:
+        cur["spatial"] = bool(spatial)
+    
+    save_audio_fx(cur)
+
+    # Build libavfilter chain
+    filters = []
+    
+    # 1. 10-band EQ
+    eq_preset = cur.get("eq", "Flat")
+    if eq_preset != "Flat" and eq_preset in EQ_PRESETS:
+        gains = EQ_PRESETS[eq_preset]
+        eq_parts = [f"equalizer=f={f}:width_type=o:width=1:gain={g}" for f, g in zip(EQ_FREQS, gains)]
+        filters.extend(eq_parts)
+
+    # 2. 3D Spatial Stereo Widener (binaural audio stage)
+    if cur.get("spatial"):
+        filters.append("extrastereo=m=1.6")
+
+    # 3. Dynamic Loudness Normalizer (EBU R128 anti-earblast)
+    if cur.get("loudnorm"):
+        filters.append("dynaudnorm=f=150:g=15:m=10.0:p=0.95")
+
+    if filters:
+        filter_str = "lavfi=[" + ",".join(filters) + "]"
+        send_mpv_cmd(["set_property", "af", filter_str])
+    else:
+        send_mpv_cmd(["set_property", "af", ""])
+
+    return {"success": True, "fx": cur}
+
+def set_eq(preset_name):
+    return apply_audio_fx(preset_name=preset_name)
 
 def get_dominant_color(img_path):
     if not img_path or not os.path.exists(img_path):
@@ -341,8 +498,7 @@ def get_status():
             if np.get("url"):
                 save_now_playing(track, artist, np.get("url", ""), int(cur_s))
 
-        resume = {"title": np.get("title", ""), "artist": np.get("artist", ""), "url": np.get("url", ""), "pos": np.get("pos", 0)} if np.get("url") else None
-
+        cur_fx = get_audio_fx()
         return {
             "running": True,
             "state": state,
@@ -361,7 +517,8 @@ def get_status():
             "speed": round(float(speed_res.get("data") or 1.0), 2) if speed_res else 1.0,
             "shuffle": False,
             "repeat": "all",
-            "eq": cur_eq,
+            "eq": cur_fx.get("eq", "Flat"),
+            "audio_fx": cur_fx,
             "resume": resume
         }
     except Exception as e:
@@ -629,7 +786,23 @@ if __name__ == "__main__":
         lim = int(sys.argv[2]) if len(sys.argv) > 2 else 30
         print(json.dumps(parse_history(lim)))
     elif action == "playlists":
-        print(json.dumps([{"name": "Recently Played", "count": len(parse_history(100))}]))
+        custom = parse_playlists()
+        result = [{"name": "Recently Played", "count": len(parse_history(100)), "system": True}]
+        for pl in custom:
+            result.append({"name": pl.get("name", "Untitled"), "count": len(pl.get("tracks", [])), "tracks": pl.get("tracks", [])})
+        print(json.dumps(result))
+    elif action == "import_playlist":
+        u = sys.argv[2] if len(sys.argv) > 2 else ""
+        n = sys.argv[3] if len(sys.argv) > 3 else None
+        print(json.dumps(import_playlist(u, n)))
+    elif action == "toggle_loudnorm":
+        cur = get_audio_fx()
+        print(json.dumps(apply_audio_fx(loudnorm=not cur.get("loudnorm", False))))
+    elif action == "toggle_spatial":
+        cur = get_audio_fx()
+        print(json.dumps(apply_audio_fx(spatial=not cur.get("spatial", False))))
+    elif action == "get_fx":
+        print(json.dumps(get_audio_fx()))
     elif action == "search":
         q = " ".join(sys.argv[2:]) if len(sys.argv) > 2 else ""
         print(json.dumps(search_tracks(q, 10)))

@@ -44,6 +44,7 @@ Panel {
   property bool shuffleMode: false
   property string repeatMode: "off"
   property string eqText: "Custom"
+  property var audioFx: ({ "eq": "Flat", "loudnorm": false, "spatial": false })
   property int _preMuteVol: 80
 
   property var historyList: []
@@ -162,6 +163,21 @@ Panel {
     root.eqText = preset
     runCmd(["set_eq", preset])
   }
+  function toggleLoudnorm() {
+    runCmd(["toggle_loudnorm"])
+    var next = !(root.audioFx && root.audioFx.loudnorm)
+    root.audioFx = { eq: root.eqText, loudnorm: next, spatial: root.audioFx ? root.audioFx.spatial : false }
+  }
+  function toggleSpatial() {
+    runCmd(["toggle_spatial"])
+    var next = !(root.audioFx && root.audioFx.spatial)
+    root.audioFx = { eq: root.eqText, loudnorm: root.audioFx ? root.audioFx.loudnorm : false, spatial: next }
+  }
+  function importPlaylist(url, name) {
+    if (!url || !url.trim()) return
+    runCmd(["import_playlist", url.trim(), name || ""])
+    Qt.callLater(loadPlaylists)
+  }
   function doResume() { runCmd(["resume"]); root.resumeVisible = false; root.loadingVid = "" }
 
   function playUrl(url, title, artist) {
@@ -186,6 +202,11 @@ Panel {
     if (!query || !query.trim()) return
     var q = query.trim()
     if (q.indexOf("http://") === 0 || q.indexOf("https://") === 0) {
+      if (q.indexOf("list=") !== -1 || q.indexOf("/playlist/") !== -1 || q.indexOf("/album/") !== -1) {
+        importPlaylist(q)
+        root.selectedTab = "playlists"
+        return
+      }
       playUrl(q)
       return
     }
@@ -204,6 +225,15 @@ Panel {
   }
 
   function loadPlaylist(name) { runCmd(["load", name]) }
+  function playPlaylist(pl) {
+    if (!pl || !pl.tracks || pl.tracks.length === 0) return
+    var t0 = pl.tracks[0]
+    playUrl(t0.url || (t0.title + " " + t0.artist), t0.title, t0.artist)
+    for (var i = 1; i < pl.tracks.length; i++) {
+      var t = pl.tracks[i]
+      queueUrl(t.url || (t.title + " " + t.artist), t.title, t.artist)
+    }
+  }
 
   function stopDaemon() {
     runCmd(["stop_daemon"])
@@ -258,6 +288,7 @@ Panel {
           root.shuffleMode = data.shuffle === true
           root.repeatMode = String(data.repeat || "off")
           root.eqText = String(data.eq || "Custom")
+          if (data.audio_fx) root.audioFx = data.audio_fx
           if (data.resume && root.playbackState === "stopped") {
             root.resumeInfo = data.resume
             root.resumeVisible = true

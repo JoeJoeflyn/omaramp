@@ -46,6 +46,28 @@ Item {
   property int lyricsCurrentIdx: -1
   property string lyricsTrack: ""
 
+  property real beatDropPulse: 0.0
+  property real _bassAvg: 0.0
+  property double _lastDropTime: 0
+
+  function updateBeatDrop() {
+    if (!p || !p.visBands || p.visBands.length < 3 || !p.isPlaying) {
+      beatDropPulse = 0.0
+      return
+    }
+    var subBass = (p.visBands[0] + p.visBands[1] + p.visBands[2]) / 3.0
+    var avg = _bassAvg * 0.85 + subBass * 0.15
+    _bassAvg = avg
+    var delta = subBass - avg
+    var now = Date.now()
+    if (subBass > 0.40 && delta > 0.15 && (now - _lastDropTime) > 260) {
+      beatDropPulse = 1.0
+      _lastDropTime = now
+    } else {
+      beatDropPulse = Math.max(0.0, beatDropPulse * 0.88 - 0.02)
+    }
+  }
+
   function toggleLyrics() {
     lyricsVisible = !lyricsVisible
     if (lyricsVisible && lyricsTrack !== p.currentTrack) {
@@ -352,15 +374,14 @@ Item {
         height: Style.space(48)
         radius: Style.space(4)
         color: "#08090b"
-        borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.25) : Qt.rgba(1, 1, 1, 0.08), 1)
+        borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.25 + root.beatDropPulse * 0.45) : Qt.rgba(1, 1, 1, 0.08), 1)
 
-        // Subtle ambient dynamic accent backdrop tint
+        // Subtle ambient dynamic accent backdrop tint + beat pulse
         Rectangle {
           anchors.fill: parent; anchors.margins: 1
           radius: Style.space(3)
           color: p.dynamicAccent
-          opacity: p.isPlaying ? 0.06 : 0.0
-          Behavior on opacity { NumberAnimation { duration: 500 } }
+          opacity: p.isPlaying ? (0.06 + root.beatDropPulse * 0.16) : 0.0
         }
 
         Canvas {
@@ -369,6 +390,7 @@ Item {
           anchors.margins: Style.space(3)
 
           onPaint: {
+            root.updateBeatDrop()
             var ctx = getContext("2d")
             ctx.clearRect(0, 0, width, height)
             var count = 24, gap = 3
@@ -378,7 +400,8 @@ Item {
               bands: p.visBands, wave: p.visWave, frame: p.visFrame,
               playing: p.isPlaying, width: width, height: height, S: 2,
               count: count, barW: barW, gap: gap,
-              accent: Color.accent, foreground: p.foreground, dim: p.dim,
+              accent: p.dynamicAccent, foreground: p.foreground, dim: p.dim,
+              beatDrop: root.beatDropPulse,
               state: p._visState
             })
           }
