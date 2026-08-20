@@ -90,7 +90,7 @@ BarWidget {
         // 1. Live Animated Equalizer Waves when PLAYING (Active & Bright)
         Item {
           anchors.centerIn: parent
-          width: Style.space(14)
+          width: Style.space(16)
           height: Style.space(12)
           visible: panelLoader.item && panelLoader.item.isPlaying
 
@@ -150,6 +150,24 @@ BarWidget {
                 NumberAnimation { to: Style.space(5); duration: 270; easing.type: Easing.InOutQuad }
                 NumberAnimation { to: Style.space(10); duration: 310; easing.type: Easing.InOutQuad }
                 NumberAnimation { to: Style.space(4); duration: 230; easing.type: Easing.InOutQuad }
+              }
+            }
+
+            Rectangle {
+              id: bar4
+              width: Style.space(2)
+              height: Style.space(5)
+              radius: 1
+              color: root.bar ? (root.bar.barForeground || root.bar.foreground || "#ffffff") : "#ffffff"
+              anchors.bottom: parent.bottom
+
+              SequentialAnimation on height {
+                running: panelLoader.item && panelLoader.item.isPlaying
+                loops: Animation.Infinite
+                NumberAnimation { to: Style.space(4); duration: 260; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: Style.space(11); duration: 310; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: Style.space(5); duration: 240; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: Style.space(9); duration: 280; easing.type: Easing.InOutQuad }
               }
             }
           }

@@ -220,25 +220,80 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           spacing: Style.space(2)
 
-          Text {
+          Item {
+            id: titleClip
             width: parent.width
-            textFormat: Text.PlainText
-            text: {
-              if (!p.isRunning) return "Daemon idle — click play to start"
-              return p.currentTrack || "No track loaded"
+            implicitHeight: titleText.implicitHeight
+            clip: true
+
+            Text {
+              id: titleText
+              textFormat: Text.PlainText
+              text: {
+                if (!p.isRunning) return "Daemon idle — click play to start"
+                return p.currentTrack || "No track loaded"
+              }
+              color: p.isPlaying ? Color.accent : p.foreground
+              font.family: p.fontFamily; font.pixelSize: Style.font.bodySmall
+              font.bold: true
+
+              readonly property bool needsScroll: implicitWidth > titleClip.width
+
+              SequentialAnimation on x {
+                running: titleText.needsScroll && p.isPlaying
+                loops: Animation.Infinite
+                PauseAnimation { duration: 2500 }
+                NumberAnimation {
+                  to: -(titleText.implicitWidth - titleClip.width)
+                  duration: Math.max(1200, (titleText.implicitWidth - titleClip.width) * 35)
+                  easing.type: Easing.Linear
+                }
+                PauseAnimation { duration: 2500 }
+                NumberAnimation {
+                  to: 0
+                  duration: 600
+                  easing.type: Easing.InOutQuad
+                }
+              }
+
+              onTextChanged: x = 0
             }
-            color: p.isPlaying ? Color.accent : p.foreground
-            font.family: p.fontFamily; font.pixelSize: Style.font.bodySmall
-            font.bold: true; elide: Text.ElideRight
           }
 
-          Text {
+          Item {
+            id: artistClip
             width: parent.width
-            textFormat: Text.PlainText
-            text: p.currentArtist ? p.currentArtist : (p.isRunning ? "cliamp playback" : "omarchy audio")
-            color: p.dim
-            font.family: p.fontFamily; font.pixelSize: Style.font.caption
-            elide: Text.ElideRight
+            implicitHeight: artistText.implicitHeight
+            clip: true
+
+            Text {
+              id: artistText
+              textFormat: Text.PlainText
+              text: p.currentArtist ? p.currentArtist : (p.isRunning ? "cliamp playback" : "omarchy audio")
+              color: p.dim
+              font.family: p.fontFamily; font.pixelSize: Style.font.caption
+
+              readonly property bool needsScroll: implicitWidth > artistClip.width
+
+              SequentialAnimation on x {
+                running: artistText.needsScroll && p.isPlaying
+                loops: Animation.Infinite
+                PauseAnimation { duration: 3000 }
+                NumberAnimation {
+                  to: -(artistText.implicitWidth - artistClip.width)
+                  duration: Math.max(1000, (artistText.implicitWidth - artistClip.width) * 35)
+                  easing.type: Easing.Linear
+                }
+                PauseAnimation { duration: 3000 }
+                NumberAnimation {
+                  to: 0
+                  duration: 600
+                  easing.type: Easing.InOutQuad
+                }
+              }
+
+              onTextChanged: x = 0
+            }
           }
         }
       }
