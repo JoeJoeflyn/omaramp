@@ -212,42 +212,27 @@ Item {
         width: parent.width
         spacing: Style.space(8)
 
-        Item {
+        BorderSurface {
           width: Style.space(36); height: Style.space(36)
+          radius: Style.cornerRadius
+          color: Qt.rgba(0.08, 0.09, 0.12, 0.9)
+          borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.5) : Qt.rgba(1, 1, 1, 0.08), 1)
           anchors.verticalCenter: parent.verticalCenter
 
-          // Soft Ambient Artwork Glow
-          Rectangle {
-            anchors.centerIn: parent
-            width: parent.width + Style.space(12)
-            height: parent.height + Style.space(12)
-            radius: width / 2
-            color: p.dynamicAccent
-            opacity: (p.isPlaying && p.artPath !== "") ? 0.35 : 0.0
-            Behavior on opacity { NumberAnimation { duration: 500 } }
+          Image {
+            anchors.fill: parent; anchors.margins: 1
+            visible: p.artPath !== ""
+            source: p.artPath !== "" ? "file://" + p.artPath : ""
+            fillMode: Image.PreserveAspectCrop
+            sourceSize.width: 72; sourceSize.height: 72
           }
 
-          BorderSurface {
-            anchors.fill: parent
-            radius: Style.cornerRadius
-            color: Qt.rgba(0.08, 0.09, 0.12, 0.9)
-            borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.4) : Qt.rgba(1, 1, 1, 0.08), 1)
-
-            Image {
-              anchors.fill: parent; anchors.margins: 1
-              visible: p.artPath !== ""
-              source: p.artPath !== "" ? "file://" + p.artPath : ""
-              fillMode: Image.PreserveAspectCrop
-              sourceSize.width: 72; sourceSize.height: 72
-            }
-
-            Text {
-              anchors.centerIn: parent
-              visible: p.artPath === ""
-              text: "\uf001"
-              color: p.dynamicAccent
-              font.family: p.fontFamily; font.pixelSize: Style.font.caption
-            }
+          Text {
+            anchors.centerIn: parent
+            visible: p.artPath === ""
+            text: "\uf001"
+            color: p.dynamicAccent
+            font.family: p.fontFamily; font.pixelSize: Style.font.caption
           }
         }
 
