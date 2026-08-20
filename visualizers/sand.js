@@ -128,10 +128,23 @@ function render(ctx, d) {
   }
 
   // 5. Render Sand Grains with Dynamic Glowing Palette
-  var accent = d.accent || Qt.rgba(0.27, 0.33, 0.59, 1.0)
-  var col1 = Qt.rgba(accent.r, accent.g, accent.b, 0.75)
-  var col2 = Qt.rgba(Math.min(1.0, accent.r * 1.2 + 0.1), Math.min(1.0, accent.g * 1.1 + 0.1), Math.min(1.0, accent.b * 1.2 + 0.1), 0.9)
-  var col3 = Qt.rgba(1.0, 0.82, 0.38, 0.95)
+  var acc = d.accent
+  var ar = 70, ag = 130, ab = 230
+  if (acc) {
+    if (typeof acc === "string" && acc.charAt(0) === "#" && acc.length === 7) {
+      ar = parseInt(acc.substr(1, 2), 16)
+      ag = parseInt(acc.substr(3, 2), 16)
+      ab = parseInt(acc.substr(5, 2), 16)
+    } else if (acc.r !== undefined && acc.g !== undefined && acc.b !== undefined) {
+      ar = Math.round(acc.r <= 1.0 ? acc.r * 255 : acc.r)
+      ag = Math.round(acc.g <= 1.0 ? acc.g * 255 : acc.g)
+      ab = Math.round(acc.b <= 1.0 ? acc.b * 255 : acc.b)
+    }
+  }
+
+  var col1 = "rgba(" + ar + "," + ag + "," + ab + ",0.75)"
+  var col2 = "rgba(" + Math.min(255, Math.round(ar * 1.2 + 20)) + "," + Math.min(255, Math.round(ag * 1.1 + 20)) + "," + Math.min(255, Math.round(ab * 1.2 + 20)) + ",0.9)"
+  var col3 = "rgba(255,210,95,0.95)"
 
   for (var ry = 0; ry < rows; ry++) {
     for (var rx = 0; rx < cols; rx++) {
