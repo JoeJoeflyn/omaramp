@@ -1,23 +1,37 @@
-// Siri Wave (iOS 9 Fluorescent Wave) — High-polish multi-layer fluid engine
+// Siri Wave — Genuinely audio-driven fluid multi-chromatic spectrum engine
 .pragma library
 .import "helpers.js" as H
 
 function render(ctx, d) {
   var bands = d.bands || []
+  var rawWave = d.wave || []
   var w = d.width, h = d.height, frame = d.frame || 0
   var isPlaying = d.playing
   var midY = h / 2.0
   var nBands = bands.length || 24
 
-  var bass = H.bandAvg(bands, 0, 4)
-  var mids = H.bandAvg(bands, 4, 12)
-  var highs = H.bandAvg(bands, 12, 24)
+  // Real-time audio metrics
+  var bass = H.bandAvg(bands, 0, 5)
+  var mids = H.bandAvg(bands, 5, 14)
+  var highs = H.bandAvg(bands, 14, 24)
+  var totalEnergy = (bass * 0.5 + mids * 0.35 + highs * 0.15)
   var beatDrop = d.beatDrop || 0
 
-  // Dynamic amplitude with Apple critically-damped spring response
-  var targetAmp = isPlaying ? Math.min(h * 0.44, (h * 0.08) + (bass * (h * 0.38)) + (beatDrop * 10.0)) : 1.8
-  var baseAmp = targetAmp
-  var phase = frame * 0.065
+  // Strictly collapse to 0 when paused or completely silent (No fake static motion)
+  if (!isPlaying || totalEnergy < 0.005) {
+    // Flat serene resting line
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.25)"
+    ctx.lineWidth = 1.0
+    ctx.beginPath()
+    ctx.moveTo(0, midY)
+    ctx.lineTo(w, midY)
+    ctx.stroke()
+    return
+  }
+
+  // Audio-coupled phase velocity: waves move faster during high-energy music
+  var speedMult = 0.03 + (totalEnergy * 0.08)
+  var phase = frame * speedMult
 
   // Apple Global Attenuation Formula: (4 / (4 + x^4))^4 for domain x in [-2, 2]
   function globalAttenuation(x) {
@@ -26,88 +40,84 @@ function render(ctx, d) {
     return Math.pow(4.0 / (4.0 + x4), 4.0)
   }
 
-  // 1. Fluid Multi-Layer Color Curves (Official iOS 9 Fluorescent Tri-Color Harmony)
-  // Each color has 2-3 layered sub-waves with harmonic phase & frequency offsets
-  var layers = [
-    // --- Blue Layer (Deep electric blue foundation) ---
-    { r: 15,  g: 82,  b: 169, alpha: 0.40, freq: 1.1, speed: 1.0,  phaseOff: 0.0, gain: 1.00, energy: bass },
-    { r: 35,  g: 110, b: 210, alpha: 0.30, freq: 1.5, speed: 0.8,  phaseOff: 1.8, gain: 0.75, energy: bass },
-
-    // --- Red / Magenta Layer (Vibrant mid-harmonic energy) ---
-    { r: 173, g: 57,  b: 76,  alpha: 0.42, freq: 1.6, speed: -1.2, phaseOff: 1.2, gain: 0.85, energy: mids },
-    { r: 215, g: 45,  b: 105, alpha: 0.28, freq: 2.1, speed: -0.9, phaseOff: 3.0, gain: 0.65, energy: mids },
-
-    // --- Emerald Green Layer (Luminous high-frequency shimmer) ---
-    { r: 48,  g: 220, b: 155, alpha: 0.38, freq: 2.0, speed: 1.4,  phaseOff: 2.4, gain: 0.70, energy: highs },
-    { r: 80,  g: 245, b: 180, alpha: 0.25, freq: 2.6, speed: 1.1,  phaseOff: 4.2, gain: 0.50, energy: highs }
+  // Frequency-coupled ribbons:
+  // - Blue: Sub-bass & kicks
+  // - Red/Magenta: Vocals & mid-range instrumentation
+  // - Green: Highs, hi-hats, percussions
+  var curves = [
+    { r: 15,  g: 82,  b: 169, alpha: 0.55, freq: 1.0, speed: 1.0,  phaseOff: 0.0, startB: 0,  endB: 6,  power: bass * 1.4 + beatDrop * 0.5 },
+    { r: 173, g: 57,  b: 76,  alpha: 0.55, freq: 1.8, speed: -1.3, phaseOff: 1.6, startB: 6,  endB: 15, power: mids * 1.3 },
+    { r: 48,  g: 220, b: 155, alpha: 0.50, freq: 2.6, speed: 1.7,  phaseOff: 3.2, startB: 15, endB: 24, power: highs * 1.3 }
   ]
 
-  // Render fluid colored wave shapes
-  for (var c = 0; c < layers.length; c++) {
-    var ly = layers[c]
-    var curPhase = phase * ly.speed + ly.phaseOff
-    var waveScale = baseAmp * ly.gain + (isPlaying ? ly.energy * (h * 0.18) : 0)
+  // 1. Draw the 3 Audio-Sculpted Fluorescent Ribbons
+  for (var c = 0; c < curves.length; c++) {
+    var cv = curves[c]
+    var curPhase = phase * cv.speed + cv.desync
+    var amp = Math.min(h * 0.46, cv.power * (h * 0.65))
+    if (amp < 1.0) continue
 
-    // Fluid vertical gradient fill
-    var grad = ctx.createLinearGradient(0, midY - waveScale, 0, midY + waveScale * 0.5)
-    grad.addColorStop(0, "rgba(" + ly.r + "," + ly.g + "," + ly.b + "," + ly.alpha + ")")
-    grad.addColorStop(1, "rgba(" + ly.r + "," + ly.g + "," + ly.b + ", 0.02)")
+    var grad = ctx.createLinearGradient(0, midY - amp, 0, midY + amp * 0.6)
+    grad.addColorStop(0, "rgba(" + cv.r + "," + cv.g + "," + cv.b + "," + cv.alpha + ")")
+    grad.addColorStop(1, "rgba(" + cv.r + "," + cv.g + "," + cv.b + ", 0.03)")
 
     ctx.fillStyle = grad
     ctx.beginPath()
     ctx.moveTo(0, midY)
 
-    // Top curve
-    var step = 2
-    for (var i = 0; i <= w; i += step) {
-      var xNorm = (i / w) * 4.0 - 2.0 // Map to [-2, 2]
+    // Top crest modulated by FFT band distribution
+    for (var i = 0; i <= w; i += 2) {
+      var xNorm = (i / w) * 4.0 - 2.0 // [-2, 2]
       var att = globalAttenuation(xNorm)
-      var bIdx = Math.min(nBands - 1, Math.floor((i / w) * nBands))
-      var bEnergy = isPlaying ? (bands[bIdx] || 0) : 0.01
-      var disp = Math.sin(xNorm * ly.freq * Math.PI + curPhase) * (waveScale + bEnergy * 6.0) * att
+      var normIdx = (xNorm + 2.0) / 4.0 // [0, 1]
+      var bIdx = Math.min(nBands - 1, Math.max(0, Math.floor(cv.startB + normIdx * (cv.endB - cv.startB))))
+      var bVal = bands[bIdx] || 0.0
+
+      // Acoustic wave displacement combines sine carrier with real FFT bin amplitude
+      var waveVal = Math.sin(xNorm * cv.freq * Math.PI + curPhase)
+      var disp = (waveVal * amp * (0.4 + bVal * 1.2)) * att
       ctx.lineTo(i, midY - disp)
     }
 
-    // Bottom curve
-    for (var j = w; j >= 0; j -= step) {
+    // Bottom mirror curve
+    for (var j = w; j >= 0; j -= 2) {
       var xNormB = (j / w) * 4.0 - 2.0
       var attB = globalAttenuation(xNormB)
-      var bIdxB = Math.min(nBands - 1, Math.floor((j / w) * nBands))
-      var bEnergyB = isPlaying ? (bands[bIdxB] || 0) : 0.01
-      var dispB = Math.sin(xNormB * ly.freq * Math.PI + curPhase) * (waveScale + bEnergyB * 6.0) * attB
-      ctx.lineTo(j, midY + dispB * 0.28)
+      var normIdxB = (xNormB + 2.0) / 4.0
+      var bIdxB = Math.min(nBands - 1, Math.max(0, Math.floor(cv.startB + normIdxB * (cv.endB - cv.startB))))
+      var bValB = bands[bIdxB] || 0.0
+
+      var waveValB = Math.sin(xNormB * cv.freq * Math.PI + curPhase)
+      var dispB = (waveValB * amp * (0.3 + bValB * 0.8)) * attB
+      ctx.lineTo(j, midY + dispB * 0.35)
     }
 
     ctx.closePath()
     ctx.fill()
   }
 
-  // 2. Secondary Glowing Cyan/Magenta Accent Line
-  ctx.strokeStyle = "rgba(100, 220, 255, 0.40)"
-  ctx.lineWidth = 1.2
-  ctx.beginPath()
-  for (var k2 = 0; k2 <= w; k2 += 2) {
-    var xk2 = (k2 / w) * 4.0 - 2.0
-    var attK2 = globalAttenuation(xk2)
-    var bIdxK2 = Math.min(nBands - 1, Math.floor((k2 / w) * nBands))
-    var bEnergyK2 = isPlaying ? (bands[bIdxK2] || 0) : 0.01
-    var ySub = midY - Math.sin(xk2 * 1.8 * Math.PI + phase * 1.2 + 0.5) * (baseAmp * 0.85 + bEnergyK2 * 6.0) * attK2
-    if (k2 === 0) ctx.moveTo(k2, ySub)
-    else ctx.lineTo(k2, ySub)
-  }
-  ctx.stroke()
-
-  // 3. Primary White Glowing Support Line (The signature Apple Siri Crest)
+  // 2. Primary Luminous Support Crest Line (Directly displaced by raw audio waveform)
+  var waveLen = rawWave.length
   ctx.strokeStyle = "rgba(255, 255, 255, 0.96)"
-  ctx.lineWidth = 2.0
+  ctx.lineWidth = 1.8
   ctx.beginPath()
 
   for (var k = 0; k <= w; k += 2) {
     var xk = (k / w) * 4.0 - 2.0
     var attK = globalAttenuation(xk)
     var bIdxK = Math.min(nBands - 1, Math.floor((k / w) * nBands))
-    var bEnergyK = isPlaying ? (bands[bIdxK] || 0) : 0.01
-    var yPrimary = midY - Math.sin(xk * 1.35 * Math.PI + phase * 1.0) * (baseAmp * 1.08 + bEnergyK * 7.5) * attK
+    var bEnergyK = bands[bIdxK] || 0.0
+
+    var rawSample = 0.0
+    if (waveLen > 0) {
+      var wIdx = Math.min(waveLen - 1, Math.floor((k / w) * waveLen))
+      rawSample = rawWave[wIdx] || 0.0
+    }
+
+    // Blend harmonic carrier with live raw audio waveform sample
+    var liveDisp = ((rawSample * (h * 0.38)) + Math.sin(xk * 1.35 * Math.PI + phase) * (bEnergyK * (h * 0.42))) * attK
+    var yPrimary = midY - liveDisp
+
     if (k === 0) ctx.moveTo(k, yPrimary)
     else ctx.lineTo(k, yPrimary)
   }
