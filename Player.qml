@@ -162,7 +162,7 @@ Item {
         Text {
           id: lyricsIcon
           anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-          text: "\uf130"
+          text: "\uf10d"
           color: root.lyricsVisible ? Color.accent : (lyricsMouse.containsMouse ? Color.accent : p.dim)
           font.family: p.fontFamily; font.pixelSize: Style.font.caption
           MouseArea {

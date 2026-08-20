@@ -132,8 +132,13 @@ Panel {
   }
 
   function toggleMute() {
-    if (root.volumePct > 0) { root._preMuteVol = root.volumePct; setVolume(0) }
-    else setVolume(root._preMuteVol || 80)
+    if (root.volumePct > 0) {
+      root._preMuteVol = root.volumePct
+      setVolume(0)
+    } else {
+      var target = (root._preMuteVol && root._preMuteVol > 0) ? root._preMuteVol : 80
+      setVolume(target)
+    }
   }
 
   function seekTo(sec) { runCmd(["seek", String(sec)]) }
@@ -235,7 +240,7 @@ Panel {
           if (playerComp.lyricsVisible) playerComp.updateLyricsPosition(root.curSecs)
           root.totalSecs = Number(data.total_secs || 0)
           root.progress = Number(data.progress || 0.0)
-          root.volumePct = Number(data.volume_pct || 80)
+          root.volumePct = (data.volume_pct !== undefined && data.volume_pct !== null) ? Number(data.volume_pct) : 80
           root.playbackSpeed = Number(data.speed || 1.0)
           root.volumeDb = Number(data.volume_db || 0.0)
           root.shuffleMode = data.shuffle === true
@@ -483,7 +488,7 @@ Panel {
 
               Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: "\uf130"
+                text: "\uf10d"
                 color: Color.accent; font.family: root.fontFamily; font.pixelSize: Style.font.caption
               }
               Text {
