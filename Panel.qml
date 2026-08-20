@@ -469,6 +469,7 @@ Panel {
         else if (playerComp.lyricsVisible) playerComp.toggleLyrics()
         else root.close()
       }
+      onTabRequested: function(direction) { root.switchPanel(direction) }
       onActivateRequested: root.togglePlayback()
       onMoveRequested: function(dx, dy) {
         if (dy < 0) root.adjustVolume(5)
