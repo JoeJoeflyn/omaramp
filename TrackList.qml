@@ -181,8 +181,8 @@ Column {
             Column {
               width: parent.width - Style.space(12) - durText.implicitWidth - Style.space(12) - (modelData.thumb ? Style.space(34) : 0)
               anchors.verticalCenter: parent.verticalCenter; spacing: 0
-              Text { width: parent.width; text: modelData.title || "Track"; color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true; elide: Text.ElideRight }
-              Text { width: parent.width; text: modelData.artist || ""; color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption; elide: Text.ElideRight; visible: modelData.artist !== "" }
+              Text { width: parent.width; textFormat: Text.PlainText; text: modelData.title || "Track"; color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true; elide: Text.ElideRight }
+              Text { width: parent.width; textFormat: Text.PlainText; text: modelData.artist || ""; color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption; elide: Text.ElideRight; visible: modelData.artist !== "" }
             }
 
             Text {
@@ -238,6 +238,7 @@ Column {
             Text {
               width: parent.width - Style.space(12) - recDurText.implicitWidth - Style.space(12) - (modelData.thumb ? Style.space(34) : 0)
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: (modelData.artist ? modelData.artist + " - " : "") + (modelData.title || "Track")
               color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; elide: Text.ElideRight
             }

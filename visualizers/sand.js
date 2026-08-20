@@ -1,6 +1,6 @@
 // Sand — vis_sand.go: falling-sand cellular automaton
-// ponytail:  grid is ~160 dot-rows; our canvas is 42px. Scale physics
-// by rows/160 so explosions peak at ~50% height like  not 193%.
+// cliamp dot grid is 20×148 (Rows*4 × PanelWidth*2); canvas is ~21×190
+// (h/2 × w/2) — nearly identical, so keep physics constants 1:1.
 .pragma library
 .import "helpers.js" as H
 
@@ -8,8 +8,6 @@ function render(ctx, d) {
   var bands = d.bands, h = d.height, w = d.width, count = d.count, S = d.S, frame = d.frame
   // 2px rows → 2×2 grains (visible), fall in 21 frames
   var rows = Math.floor(h / 2), cols = Math.floor(w / 2)
-  // Scale physics to match  160-row grid proportions
-  var physScale = rows / 160.0
   var s = d.state
   if (s.sandRng === undefined) { s.sandRng = 0x5A4D5A4D; s.sandPrevBass = 0; s.sandParticles = []; s.sandExplosionTTL = 0 }
   if (!s.sandGrid || s.sandRows !== rows || s.sandCols !== cols) {
@@ -23,13 +21,17 @@ function render(ctx, d) {
     return ((rngVal >> 16) % 1000) / 1000.0
   }
 
-  var bass = H.bandAvg(bands, 0, Math.max(1, Math.floor(count / 3)))
+  // Match cliamp DefaultSpectrumBands=10: resample 24→10 so spawn
+  // distribution and tier mapping equal vis_sand.go. Without this,
+  // 24 narrow bands leave the rightmost 16% empty when highs are quiet.
+  var _sandBands = H.resampleBandsLinear(bands, 10)
+  var bass = H.bandAvg(_sandBands, 0, Math.max(1, Math.floor(10 / 3)))
   var delta = bass - s.sandPrevBass
   s.sandPrevBass = bass
 
   // EXPLOSION PHASE: suspend normal sim, animate ballistic particles
   if (s.sandExplosionTTL > 0 || s.sandParticles.length > 0) {
-    tickExplosion(grid, rows, cols, s.sandParticles, physScale)
+    tickExplosion(grid, rows, cols, s.sandParticles)
     s.sandExplosionTTL = Math.max(0, s.sandExplosionTTL - 1)
     if (s.sandParticles.length === 0) s.sandExplosionTTL = 0
     renderGrid(ctx, grid, rows, cols)
@@ -37,16 +39,18 @@ function render(ctx, d) {
     return
   }
 
-  // Spawn grains — probability ∝ band level, at column proportional to band index
-  for (var b = 0; b < count; b++) {
-    var level = bands[b] || 0
-    if (level < 0.10) continue
+  // Spawn grains — threshold 0.04 (vs cliamp 0.10) so quiet highs
+  // still seed the right edge occasionally; otherwise 24→10 resample
+  // leaves last 10-15% empty on this 22050Hz capture and sand looks left-only.
+  for (var b = 0; b < 10; b++) {
+    var level = _sandBands[b] || 0
+    if (level < 0.04) continue
     if (rand01() > level * 0.85) continue
-    var centre = (b * 2 + 1) * cols / (2 * count)
-    var spread = Math.max(1, Math.floor(cols / (count * 2)))
+    var centre = (b * 2 + 1) * cols / (2 * 10)
+    var spread = Math.max(1, Math.floor(cols / (10 * 2)))
     var x = centre + Math.floor(rand01() * (2 * spread)) - spread
     x = Math.max(0, Math.min(cols - 1, x))
-    var tier = b < count / 3 ? 3 : b < 2 * count / 3 ? 2 : 1
+    var tier = b < 10 / 3 ? 3 : b < 2 * 10 / 3 ? 2 : 1
     if (grid[x] === 0) grid[x] = tier
   }
 
@@ -55,7 +59,7 @@ function render(ctx, d) {
     var fill = 0
     for (var gi = 0; gi < grid.length; gi++) if (grid[gi] !== 0) fill++
     if (fill / grid.length > 0.30) {
-      startExplosion(grid, rows, cols, s.sandParticles, rand01, physScale)
+      startExplosion(grid, rows, cols, s.sandParticles, rand01)
       s.sandExplosionTTL = 80
       renderGrid(ctx, grid, rows, cols)
       s.sandRng = rngVal
@@ -134,7 +138,7 @@ function renderGrid(ctx, grid, rows, cols) {
   }
 }
 
-function startExplosion(grid, rows, cols, particles, rand01, physScale) {
+function startExplosion(grid, rows, cols, particles, rand01) {
   particles.length = 0
   for (var y = 0; y < rows; y++) {
     var df = y / Math.max(1, rows - 1)
@@ -142,19 +146,18 @@ function startExplosion(grid, rows, cols, particles, rand01, physScale) {
       var g = grid[y * cols + x]
       if (g === 0) continue
       grid[y * cols + x] = 0
-      // Scale velocities by physScale so apex matches  ~50% of height
       particles.push({
         x: x, y: y,
-        vx: (rand01() - 0.5) * 8.0 * physScale,
-        vy: -(2.0 + rand01() * 5.0 + df * 2.0) * physScale,
+        vx: (rand01() - 0.5) * 8.0,
+        vy: -(2.0 + rand01() * 5.0 + df * 2.0),
         tier: g
       })
     }
   }
 }
 
-function tickExplosion(grid, rows, cols, particles, physScale) {
-  var gravity = 0.50 * physScale, drag = 0.985
+function tickExplosion(grid, rows, cols, particles) {
+  var gravity = 0.50, drag = 0.985
   for (var i = 0; i < grid.length; i++) grid[i] = 0
   var live = []
   for (var p = 0; p < particles.length; p++) {

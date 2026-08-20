@@ -1,6 +1,6 @@
 // Geyser — vis_geyser.go: particle fountain with gravity
-// ponytail:  physics are tuned for a ~160-dot grid; our canvas is ~42px.
-// Scale gravity and velocities by h/160 so the arc proportions match.
+// cliamp dot grid 20×148 (Rows*4 × PanelWidth*2); canvas ~42×380px —
+// keep original dot-unit velocities 1:1 (gravity/drag unchanged).
 .pragma library
 .import "helpers.js" as H
 
@@ -10,8 +10,6 @@ function render(ctx, d) {
   if (s.geyserRng === undefined) { s.geyserRng = 0xFEED5EED; s.geyserParticles = []; s.geyserPrevBass = 0 }
   var rngVal = s.geyserRng
   var particles = s.geyserParticles
-  // Scale factor:  dotRows ≈ 160, our canvas is h pixels
-  var physScale = h / 160.0
   function rng01() {
     rngVal = (rngVal * 1664525 + 1013904223) & 0xFFFFFFFF
     return ((rngVal >> 16) % 1000) / 1000.0
@@ -25,8 +23,8 @@ function render(ctx, d) {
 
   function spawn(x, y, spread, vy) {
     var jx = x + Math.floor(rng01() * (2 * spread + 1)) - spread
-    var vyJ = vy * (0.6 + rng01() * 0.5) * physScale
-    var vxJ = (rng01() - 0.5) * (1.0 + vy * 0.4) * physScale
+    var vyJ = vy * (0.6 + rng01() * 0.5)
+    var vxJ = (rng01() - 0.5) * (1.0 + vy * 0.4)
     var r = rng01()
     var tier = r < bass ? 3 : r < bass + mid ? 2 : 1
     particles.push({ x: jx, y: y, vx: vxJ, vy: -vyJ, tier: tier, life: 0 })
@@ -41,8 +39,8 @@ function render(ctx, d) {
     for (var i2 = 0; i2 < burst; i2++) spawn(jetX, h - 1, jetSpread * 2, 4.5 + delta * 10.0 + bass * 4.0)
   }
 
-  // Advance particles (gravity and drag scaled to canvas height)
-  var gravity = 0.30 * physScale, drag = 0.992
+  // Advance particles — same constants as cliamp (gravity 0.30, drag 0.992)
+  var gravity = 0.30, drag = 0.992
   var live = []
   for (var p = 0; p < particles.length; p++) {
     var pt = particles[p]

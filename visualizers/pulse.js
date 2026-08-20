@@ -5,7 +5,8 @@
 function render(ctx, d) {
   var bands = d.bands, h = d.height, w = d.width, count = d.count, frame = d.frame
   var pcx = w / 2, pcy = h / 2
-  var maxR = Math.min(w, h) / 2 - 1
+  var xScale = pcy / Math.max(1, pcx)
+  var maxR = pcy - 1
   var total = 0
   for (var i = 0; i < count; i++) total += (bands[i] || 0)
   var avg = total / count
@@ -19,7 +20,7 @@ function render(ctx, d) {
   var bandScale = count / twoPi
   for (var py = 0; py < h; py += 2) {
     for (var px = 0; px < w; px += 2) {
-      var pdx = px - pcx, pdy = py - pcy
+      var pdx = (px - pcx) * xScale, pdy = py - pcy
       var pdist = Math.sqrt(pdx * pdx + pdy * pdy)
       if (pdist > maxR + 2) continue
       var angle = Math.atan2(pdy, pdx)

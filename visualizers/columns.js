@@ -13,7 +13,7 @@ function render(ctx, d) {
     var barH = Math.round(level * h)
     var x = c * (colW + colGap)
     for (var y = 0; y < barH; y++) {
-      ctx.fillStyle = H.specColor(1 - y / h)
+      ctx.fillStyle = H.specColor(y / h)
       ctx.fillRect(x, h - 1 - y, colW, 1)
     }
   }

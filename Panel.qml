@@ -35,6 +35,7 @@ Panel {
   property int curSecs: 0
   property int totalSecs: 0
   property real progress: 0.0
+  property real playbackSpeed: 1.0
   property int volumePct: 80
   property real volumeDb: 0.0
   property bool shuffleMode: false
@@ -70,6 +71,7 @@ Panel {
     root.refresh()
     loadHistory()
     loadPlaylists()
+    runCmd(["start_spectrum"])
   }
 
   function openFromHotkey() {
@@ -78,6 +80,7 @@ Panel {
     root.refresh()
     loadHistory()
     loadPlaylists()
+    runCmd(["start_spectrum"])
     Qt.callLater(function() {
       if (root.opened) setCenterHoverRevealSuppressed(true)
     })
@@ -86,6 +89,7 @@ Panel {
   function close() {
     setCenterHoverRevealSuppressed(false)
     root.controller.hide()
+    runCmd(["stop_spectrum"])
   }
 
   function toggle() {
@@ -133,6 +137,15 @@ Panel {
   }
 
   function seekTo(sec) { runCmd(["seek", String(sec)]) }
+  function cycleSpeed() {
+    var speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+    var cur = root.playbackSpeed
+    var idx = 0
+    for (var i = 0; i < speeds.length; i++) { if (Math.abs(speeds[i] - cur) < 0.05) { idx = i; break } }
+    var next = speeds[(idx + 1) % speeds.length]
+    root.playbackSpeed = next
+    runCmd(["speed", String(next)])
+  }
   function doResume() { runCmd(["resume"]); root.resumeVisible = false; root.loadingVid = "" }
 
   function playUrl(url, title, artist) {
@@ -223,6 +236,7 @@ Panel {
           root.totalSecs = Number(data.total_secs || 0)
           root.progress = Number(data.progress || 0.0)
           root.volumePct = Number(data.volume_pct || 80)
+          root.playbackSpeed = Number(data.speed || 1.0)
           root.volumeDb = Number(data.volume_db || 0.0)
           root.shuffleMode = data.shuffle === true
           root.repeatMode = String(data.repeat || "off")
@@ -291,9 +305,12 @@ Panel {
     onTriggered: root.refresh()
   }
 
+  readonly property var _xdg: Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000"
+  readonly property string spectrumPath: "/dev/shm/omaramp_spectrum_" + _xdg.split("/").pop() + ".json"
+
   FileView {
     id: specFile
-    path: "/dev/shm/omaramp_spectrum.json"
+    path: root.spectrumPath
     watchChanges: true; printErrors: false
     onFileChanged: root.updateSpectrumData(text())
     onLoaded: root.updateSpectrumData(text())
@@ -324,7 +341,7 @@ Panel {
       if (Array.isArray(bands) && bands.length >= 24) {
         var newBands = [], newPeaks = []
         for (var i = 0; i < 24; i++) {
-          var target = Math.min(1.0, Math.max(0.02, Number(bands[i]) || 0.0))
+          var target = Math.min(1.0, Math.max(0.0, Number(bands[i]) || 0.0))
           var prevPeak = root.visPeaks[i] || 0.0
           newBands.push(target)
           newPeaks.push(Math.max(target, prevPeak - 0.03))
@@ -391,6 +408,17 @@ Panel {
         else if (t === "m") root.toggleMute()
       }
 
+      // Blurred album art background
+      Image {
+        anchors.fill: parent
+        source: root.artPath
+        fillMode: Image.PreserveAspectCrop
+        visible: root.artPath !== ""
+        opacity: 0.12
+        smooth: true
+        z: -1
+      }
+
       Column {
         id: mainColumn
         width: parent.width - Style.space(20)
@@ -453,6 +481,7 @@ Panel {
 
             Text {
               width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+              textFormat: Text.PlainText
               text: {
                 var i = playerComp.lyricsCurrentIdx
                 if (i < 0 || !playerComp.lyricsLines[i]) return "♪"
@@ -464,6 +493,7 @@ Panel {
 
             Text {
               width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+              textFormat: Text.PlainText
               text: {
                 var i = playerComp.lyricsCurrentIdx + 1
                 if (i < 0 || !playerComp.lyricsLines[i]) return ""

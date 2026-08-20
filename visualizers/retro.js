@@ -56,9 +56,8 @@ function render(ctx, d) {
     var bi = Math.floor(bandF)
     var frac = bandF - bi
     var t = (1 - Math.cos(frac * Math.PI)) / 2
-    var level = bi >= count - 1 ? (bands[count-1] || 0) :
-                (bands[bi] || 0) * (1 - t) + (bands[bi+1] || 0) * t
-    level = Math.max(0.03, level)
+    var level = d.playing ? Math.max(0.0, bi >= count - 1 ? (bands[count-1] || 0) :
+                (bands[bi] || 0) * (1 - t) + (bands[bi+1] || 0) * t) : 0
     var ry = horizon - level * maxWave
     if (rx === 0) ctx.moveTo(rx, ry)
     else ctx.lineTo(rx, ry)

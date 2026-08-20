@@ -10,7 +10,8 @@ import re
 import urllib.request
 import urllib.parse
 
-SOCK_PATH = "/tmp/omaramp_mpv.sock"
+SOCK_PATH = f"/tmp/omaramp_mpv_{os.getuid()}.sock"
+STREAM_FIFO = f"/tmp/omaramp_stream_{os.getuid()}"
 CACHE_DIR = os.path.expanduser("~/.cache/omaramp")
 AUDIO_CACHE_DIR = os.path.join(CACHE_DIR, "audio")
 HISTORY_PATH = os.path.expanduser("~/.config/cliamp/history.toml")
@@ -68,6 +69,12 @@ def start_spectrum_daemon():
     except Exception:
         pass
 
+def stop_spectrum_daemon():
+    try:
+        subprocess.run(["pkill", "-f", "omaramp/spectrum.py"], capture_output=True)
+    except Exception:
+        pass
+
 def start_mpv_daemon():
     if not is_mpv_running():
         if os.path.exists(SOCK_PATH):
@@ -91,7 +98,6 @@ def start_mpv_daemon():
             time.sleep(0.1)
             if os.path.exists(SOCK_PATH):
                 break
-    start_spectrum_daemon()
 
 def record_history(title, artist, url, dur):
     try:
@@ -174,6 +180,7 @@ def get_status():
         pause_res = send_mpv_cmd(["get_property", "pause"])
         title_res = send_mpv_cmd(["get_property", "media-title"])
         vol_res = send_mpv_cmd(["get_property", "volume"])
+        speed_res = send_mpv_cmd(["get_property", "speed"])
         idle_res = send_mpv_cmd(["get_property", "idle-active"])
 
         is_idle = idle_res.get("data") is True if idle_res else False
@@ -251,6 +258,7 @@ def get_status():
             "progress": round(prog, 3),
             "volume_db": round((vol / 100.0) * 36.0 - 30.0, 1),
             "volume_pct": vol,
+            "speed": round(float(speed_res.get("data") or 1.0), 2) if speed_res else 1.0,
             "shuffle": False,
             "repeat": "all",
             "eq": "Custom",
@@ -313,10 +321,24 @@ def search_tracks(query, limit=10):
     except Exception:
         return []
 
-STREAM_FIFO = "/tmp/omaramp_stream"
 
 def is_youtube_url(url):
-    return "youtube.com/watch" in url or "youtu.be/" in url
+    if not url:
+        return False
+    parsed = urllib.parse.urlparse(url)
+    return parsed.scheme in ("http", "https") and parsed.netloc in ("www.youtube.com", "youtube.com", "youtu.be", "music.youtube.com")
+
+def is_safe_url(url):
+    if not url:
+        return False
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme in ("http", "https"):
+        return True
+    if parsed.scheme == "file":
+        return False
+    if not parsed.scheme and not parsed.netloc:
+        return os.path.isfile(url)
+    return False
 
 LYRICS_CACHE = {}
 def fetch_lyrics(title, artist, url=""):
@@ -424,28 +446,54 @@ def stream_youtube(url):
         start_new_session=True
     )
 
+def fade_volume(target, steps=8, delay=0.04):
+    cur_res = send_mpv_cmd(["get_property", "volume"])
+    if not cur_res or cur_res.get("data") is None:
+        return
+    cur = float(cur_res["data"])
+    if abs(cur - target) < 1:
+        return
+    step = (target - cur) / steps
+    for i in range(steps):
+        cur += step
+        send_mpv_cmd(["set_property", "volume", round(cur, 1)])
+        time.sleep(delay)
+
 def play_item(url, title=None, artist=None):
-    if not url:
-        return {"success": False}
+    if not url or not is_safe_url(url):
+        return {"success": False, "error": "unsafe url"}
     start_mpv_daemon()
     final_title = title or "Track"
     final_artist = artist or ""
     record_history(final_title, final_artist, url, 0)
+    # Save current volume for fade-in target
+    vol_res = send_mpv_cmd(["get_property", "volume"])
+    target_vol = float(vol_res.get("data") or 80) if vol_res else 80
+    # Fade out current track
+    state_res = send_mpv_cmd(["get_property", "pause"])
+    if state_res and state_res.get("data") is False:
+        fade_volume(0, steps=6, delay=0.05)
     if is_youtube_url(url):
         save_youtube_meta(url, final_title, final_artist)
         save_now_playing(final_title, final_artist, url)
         stream_youtube(url)
         send_mpv_cmd(["loadfile", STREAM_FIFO, "replace"])
         send_mpv_cmd(["set_property", "pause", False])
+        send_mpv_cmd(["set_property", "volume", 0])
+        time.sleep(1.5)
+        fade_volume(target_vol, steps=8, delay=0.05)
         return {"success": True}
     save_now_playing(final_title, final_artist, url)
     send_mpv_cmd(["loadfile", url, "replace"])
     send_mpv_cmd(["set_property", "pause", False])
+    send_mpv_cmd(["set_property", "volume", 0])
+    time.sleep(0.5)
+    fade_volume(target_vol, steps=8, delay=0.05)
     return {"success": True}
 
 def queue_item(url, title=None, artist=None):
-    if not url:
-        return {"success": False}
+    if not url or not is_safe_url(url):
+        return {"success": False, "error": "unsafe url"}
     start_mpv_daemon()
     final_title = title or "Track"
     final_artist = artist or ""
@@ -495,6 +543,16 @@ if __name__ == "__main__":
     elif action == "toggle":
         start_mpv_daemon()
         send_mpv_cmd(["cycle", "pause"])
+        print(json.dumps({"success": True}))
+    elif action == "start_spectrum":
+        start_spectrum_daemon()
+        print(json.dumps({"success": True}))
+    elif action == "stop_spectrum":
+        stop_spectrum_daemon()
+        print(json.dumps({"success": True}))
+    elif action == "speed":
+        s = sys.argv[2] if len(sys.argv) > 2 else "1.0"
+        send_mpv_cmd(["set_property", "speed", float(s)])
         print(json.dumps({"success": True}))
     elif action == "stop":
         pos_res = send_mpv_cmd(["get_property", "time-pos"])

@@ -3,13 +3,13 @@
 import os, sys, time, math, struct, subprocess, signal
 import numpy as np
 
-OUT_FILE = "/dev/shm/omaramp_spectrum.json"
-RATE = 22050
-CHUNK = 2048  # 2048-sample FFT — gives 1024 bins, 10.8Hz/bin
+OUT_FILE = f"/dev/shm/omaramp_spectrum_{os.getuid()}.json"
+RATE = 44100
+CHUNK = 2048  # 2048-sample FFT — 44100/2048=21.5Hz/bin, Nyquist 22050 covers 12kHz+
 NUM_BANDS = 24
 WAVE_SAMPLES = 128  # raw waveform points for scope/wave modes
 
-min_f, max_f = 40.0, 12000.0
+min_f, max_f = 20.0, 16000.0  # match cliamp legacySpectrumEdges 20-16000
 edges = [min_f * ((max_f / min_f) ** (i / float(NUM_BANDS))) for i in range(NUM_BANDS + 1)]
 bin_edges = [max(1, min(CHUNK // 2, int(round(f * CHUNK / RATE)))) for f in edges]
 for i in range(1, len(bin_edges)):
@@ -69,14 +69,16 @@ def run():
                 db = 20.0 * math.log10(avg_mag + 1e-10)
                 # -96dB floor with 96dB dynamic range
                 norm_val = max(0.0, (db + 96.0) / 96.0)
-                # Treble tilt: boost high bands to compensate for compressed audio
-                # ponytail: YouTube/MP3 cuts highs; tilt up to 4× at band 23
-                tilt = 1.0 + (i / float(NUM_BANDS)) * 3.0
+                # Treble tilt: match cliamp's log-spaced edges + boost highs for
+                # compressed streams (YouTube/MP3). Up to 5× at band 23.
+                tilt = 1.0 + (i / float(NUM_BANDS)) * 4.0
                 mag = min(1.0, norm_val * tilt)
                 if mag > decay_bands[i]:
-                    decay_bands[i] = mag
+                    # fast attack like cliamp 0.6/0.4
+                    decay_bands[i] = mag * 0.6 + decay_bands[i] * 0.4
                 else:
-                    decay_bands[i] = max(0.0, decay_bands[i] * 0.82 - 0.015)
+                    # slow decay like cliamp 0.25/0.75
+                    decay_bands[i] = max(0.0, mag * 0.25 + decay_bands[i] * 0.75)
                 cur_bands.append(round(decay_bands[i], 3))
 
             # Downsample raw waveform for scope/wave modes, with gain

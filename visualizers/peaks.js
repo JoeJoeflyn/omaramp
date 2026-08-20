@@ -1,5 +1,6 @@
 // Peaks — vis_classic_peak.go: physics-based falling caps
 .pragma library
+.import "helpers.js" as H
 
 function render(ctx, d) {
   var bands = d.bands, h = d.height, w = d.width, count = d.count, barW = d.barW, gap = d.gap
@@ -40,11 +41,13 @@ function render(ctx, d) {
       }
     }
     var barH = Math.round(level * h)
-    ctx.fillStyle = d.accent
-    ctx.fillRect(px, h - barH, barW, barH)
+    for (var y = 0; y < barH; y++) {
+      ctx.fillStyle = H.specColor(y / h)
+      ctx.fillRect(px, h - 1 - y, barW, 1)
+    }
     if (peakPos[p] > level + 0.01) {
       var peakY = h - Math.round(peakPos[p] * h)
-      ctx.fillStyle = d.foreground
+      ctx.fillStyle = "#ffffff"
       ctx.fillRect(px, peakY, barW, 2)
     }
   }

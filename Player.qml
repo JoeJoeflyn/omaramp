@@ -78,7 +78,6 @@ Item {
     }
     if (idx !== lyricsCurrentIdx) {
       lyricsCurrentIdx = idx
-      lyricsFlick.contentY = Math.max(0, idx * Style.space(16) - lyricsFlick.height / 2)
     }
   }
 
@@ -161,6 +160,7 @@ Item {
         }
 
         Text {
+          id: lyricsIcon
           anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
           text: "\uf086"
           color: root.lyricsVisible ? Color.accent : (lyricsMouse.containsMouse ? Color.accent : p.dim)
@@ -169,6 +169,19 @@ Item {
             id: lyricsMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
             onClicked: root.toggleLyrics()
             onContainsMouseChanged: lyricsTip.visible = containsMouse
+          }
+        }
+
+        Text {
+          anchors.right: lyricsIcon.left; anchors.rightMargin: Style.space(6)
+          anchors.verticalCenter: parent.verticalCenter
+          text: p.playbackSpeed !== 1.0 ? p.playbackSpeed + "x" : "\uf04e"
+          color: p.playbackSpeed !== 1.0 ? Color.accent : (speedMouse.containsMouse ? Color.accent : p.dim)
+          font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8; font.bold: p.playbackSpeed !== 1.0
+          MouseArea {
+            id: speedMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+            onClicked: p.cycleSpeed()
+            onContainsMouseChanged: speedTip.visible = containsMouse
           }
         }
       }
@@ -205,6 +218,7 @@ Item {
           Text {
             width: parent.width - Style.space(20) - (p.artPath !== "" ? Style.space(34) : 0)
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: {
               if (!p.isRunning) return "daemon idle — click play to start"
               var a = p.currentArtist, t = p.currentTrack
@@ -318,6 +332,15 @@ Item {
       anchors.right: parent.right; anchors.rightMargin: Style.space(24)
       anchors.top: parent.top; anchors.topMargin: Style.space(2)
       text: "Lyrics"; color: Color.accent
+      font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.7
+      z: 9999
+    }
+
+    Text {
+      id: speedTip; visible: false
+      anchors.right: parent.right; anchors.rightMargin: Style.space(48)
+      anchors.top: parent.top; anchors.topMargin: Style.space(2)
+      text: "Speed"; color: Color.accent
       font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.7
       z: 9999
     }
