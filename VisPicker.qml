@@ -12,7 +12,6 @@ BorderSurface {
   readonly property var allModes: [
     // Classic & VU
     { id: "bars", name: "Bars", category: "classic", icon: "\uf080" },
-    { id: "apple_bars", name: "Apple Music", category: "classic", icon: "\uf179" },
     { id: "classic_led", name: "Classic LED", category: "classic", icon: "\uf111" },
     { id: "peaks", name: "Peaks", category: "classic", icon: "\uf012" },
     { id: "columns", name: "Columns", category: "classic", icon: "\uf0db" },
@@ -23,7 +22,7 @@ BorderSurface {
     { id: "ascii", name: "ASCII", category: "classic", icon: "\uf121" },
 
     // Wave & Scope
-    { id: "apple_wave", name: "Apple Wave", category: "scope", icon: "\uf179" },
+    { id: "siriwave", name: "SiriWave", category: "scope", icon: "\uf179" },
     { id: "wave", name: "Waveform", category: "scope", icon: "\uf21e" },
     { id: "scope", name: "XY Scope", category: "scope", icon: "\uf1fe" },
     { id: "sine", name: "Sine Wave", category: "scope", icon: "\uf1d8" },
@@ -85,7 +84,7 @@ BorderSurface {
       Text {
         width: parent.width - Style.space(48)
         anchors.verticalCenter: parent.verticalCenter
-        text: "Visualizer Styles (32)"
+        text: "Visualizer Styles (31)"
         color: p ? p.foreground : "#fff"
         font.family: p ? p.fontFamily : "sans-serif"
         font.pixelSize: Style.font.caption; font.bold: true
