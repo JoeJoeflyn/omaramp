@@ -73,7 +73,7 @@ function render(ctx, d) {
       topGrad.addColorStop(1, "rgba(" + ar + "," + ag + "," + ab + ", 0.85)")
       ctx.fillStyle = topGrad
       ctx.beginPath()
-      ctx.roundRect(bx, topY, barW, topH, [r, r, 0, 0])
+      H.roundedRect(ctx, bx, topY, barW, topH, r)
       ctx.fill()
 
       // ── Played Bottom Reflection: Muted accent with shadow falloff ──
@@ -82,19 +82,19 @@ function render(ctx, d) {
       botGrad.addColorStop(1, "rgba(" + ar + "," + ag + "," + ab + ", 0.15)")
       ctx.fillStyle = botGrad
       ctx.beginPath()
-      ctx.roundRect(bx, botY, barW, botH, [0, 0, r, r])
+      H.roundedRect(ctx, bx, botY, barW, botH, r)
       ctx.fill()
     } else {
       // ── Unplayed Top Bar: Clean translucent white ──
       ctx.fillStyle = "rgba(255, 255, 255, 0.28)"
       ctx.beginPath()
-      ctx.roundRect(bx, topY, barW, topH, [r, r, 0, 0])
+      H.roundedRect(ctx, bx, topY, barW, topH, r)
       ctx.fill()
 
       // ── Unplayed Bottom Reflection: Deep translucent dim ──
       ctx.fillStyle = "rgba(255, 255, 255, 0.10)"
       ctx.beginPath()
-      ctx.roundRect(bx, botY, barW, botH, [0, 0, r, r])
+      H.roundedRect(ctx, bx, botY, barW, botH, r)
       ctx.fill()
     }
   }

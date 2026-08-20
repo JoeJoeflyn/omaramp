@@ -66,7 +66,7 @@ function render(ctx, d) {
     }
 
     ctx.beginPath()
-    ctx.roundRect(px, py, pillW, pillH, r)
+    H.roundedRect(ctx, px, py, pillW, pillH, r)
     ctx.fill()
   }
 

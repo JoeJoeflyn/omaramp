@@ -62,7 +62,7 @@ function render(ctx, d) {
     lowGrad.addColorStop(1, "rgba(0, 180, 255, " + (0.90 * alphaMul).toFixed(2) + ")")
     ctx.fillStyle = lowGrad
     ctx.beginPath()
-    ctx.roundRect(bx, lowY, barW, lowH, r)
+    H.roundedRect(ctx, bx, lowY, barW, lowH, r)
     ctx.fill()
 
     // ── Tier 2: Mids (Mid Body - Neon Amber / Orange) ──
@@ -73,14 +73,14 @@ function render(ctx, d) {
     midGrad.addColorStop(1, "rgba(255, 180, 0, " + (0.95 * alphaMul).toFixed(2) + ")")
     ctx.fillStyle = midGrad
     ctx.beginPath()
-    ctx.roundRect(bx, midYPos, barW, midH, r)
+    H.roundedRect(ctx, bx, midYPos, barW, midH, r)
     ctx.fill()
 
     // ── Tier 3: Highs (Center Core - Pure White / Sparkle) ──
     var highY = midY - (highH / 2.0)
     ctx.fillStyle = "rgba(255, 255, 255, " + (0.95 * alphaMul).toFixed(2) + ")"
     ctx.beginPath()
-    ctx.roundRect(bx + (barW > 3 ? 0.5 : 0), highY, Math.max(1.5, barW - 1), highH, r)
+    H.roundedRect(ctx, bx + (barW > 3 ? 0.5 : 0), highY, Math.max(1.5, barW - 1), highH, r)
     ctx.fill()
   }
 
