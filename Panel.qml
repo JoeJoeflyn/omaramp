@@ -69,6 +69,15 @@ Panel {
   property var resumeInfo: null
   property bool resumeVisible: false
 
+  onOpenedChanged: {
+    if (!opened) {
+      runCmd(["stop_spectrum"])
+      root.visPickerOpen = false
+      root.eqPickerOpen = false
+      setCenterHoverRevealSuppressed(false)
+    }
+  }
+
   // ---- Lifecycle
   function open() {
     openedFromHotkey = false
