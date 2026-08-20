@@ -154,7 +154,50 @@ def format_seconds(secs):
     s = int(secs % 60)
     return f"{m:02d}:{s:02d}"
 
+EQ_PRESETS = {
+    "Flat": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "Bass Boost": [7.0, 6.0, 5.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "Rock": [5.0, 4.0, 2.0, -1.0, -2.0, -1.0, 2.0, 4.0, 5.0, 6.0],
+    "Electronic": [6.0, 5.0, 2.0, 0.0, -2.0, 2.0, 1.0, 3.0, 5.0, 6.0],
+    "Pop": [-1.0, 1.0, 3.0, 4.0, 4.0, 2.0, 0.0, 1.0, 2.0, 2.0],
+    "Vocal Clarity": [-3.0, -2.0, 0.0, 2.0, 4.0, 5.0, 4.0, 2.0, 0.0, -2.0],
+    "Acoustic": [4.0, 3.0, 2.0, 1.0, -1.0, -1.0, 0.0, 2.0, 3.0, 3.0],
+    "Treble Boost": [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 3.0, 5.0, 7.0, 8.0],
+    "Late Night": [-6.0, -4.0, -2.0, 1.0, 3.0, 3.0, 2.0, 1.0, 0.0, -1.0]
+}
+
+EQ_FREQS = [31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+EQ_CACHE_FILE = os.path.join(CACHE_DIR, "eq.json")
+
+def get_current_eq():
+    if os.path.exists(EQ_CACHE_FILE):
+        try:
+            with open(EQ_CACHE_FILE) as f:
+                return json.load(f).get("preset", "Flat")
+        except:
+            pass
+    return "Flat"
+
+def set_eq(preset_name):
+    if preset_name not in EQ_PRESETS:
+        preset_name = "Flat"
+    gains = EQ_PRESETS[preset_name]
+    if preset_name == "Flat":
+        send_mpv_cmd(["set_property", "af", ""])
+    else:
+        parts = [f"equalizer=f={f}:width_type=o:width=1:gain={g}" for f, g in zip(EQ_FREQS, gains)]
+        filter_str = "lavfi=[" + ",".join(parts) + "]"
+        send_mpv_cmd(["set_property", "af", filter_str])
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(EQ_CACHE_FILE, "w") as f:
+            json.dump({"preset": preset_name}, f)
+    except:
+        pass
+    return {"success": True, "preset": preset_name}
+
 def get_status():
+    cur_eq = get_current_eq()
     if not is_mpv_running():
         return {
             "running": False,
@@ -170,7 +213,7 @@ def get_status():
             "volume_pct": 80,
             "shuffle": False,
             "repeat": "off",
-            "eq": "Custom"
+            "eq": cur_eq
         }
 
     try:
@@ -262,7 +305,7 @@ def get_status():
             "speed": round(float(speed_res.get("data") or 1.0), 2) if speed_res else 1.0,
             "shuffle": False,
             "repeat": "all",
-            "eq": "Custom",
+            "eq": cur_eq,
             "resume": resume
         }
     except Exception as e:
@@ -555,6 +598,11 @@ if __name__ == "__main__":
         s = sys.argv[2] if len(sys.argv) > 2 else "1.0"
         send_mpv_cmd(["set_property", "speed", float(s)])
         print(json.dumps({"success": True}))
+    elif action == "set_eq":
+        preset = sys.argv[2] if len(sys.argv) > 2 else "Flat"
+        print(json.dumps(set_eq(preset)))
+    elif action in ["get_eq", "list_eq"]:
+        print(json.dumps({"current": get_current_eq(), "presets": list(EQ_PRESETS.keys())}))
     elif action == "stop":
         pos_res = send_mpv_cmd(["get_property", "time-pos"])
         np = read_now_playing()

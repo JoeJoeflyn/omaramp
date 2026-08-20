@@ -173,6 +173,7 @@ Item {
         }
 
         Text {
+          id: speedIcon
           anchors.right: lyricsIcon.left; anchors.rightMargin: Style.space(6)
           anchors.verticalCenter: parent.verticalCenter
           text: p.playbackSpeed !== 1.0 ? p.playbackSpeed + "x" : "\uf04e"
@@ -182,6 +183,26 @@ Item {
             id: speedMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
             onClicked: p.cycleSpeed()
             onContainsMouseChanged: speedTip.visible = containsMouse
+          }
+        }
+
+        Text {
+          id: eqIcon
+          anchors.right: speedIcon.left; anchors.rightMargin: Style.space(6)
+          anchors.verticalCenter: parent.verticalCenter
+          text: (p.eqText && p.eqText !== "Flat") ? p.eqText : "EQ"
+          color: (p.eqText && p.eqText !== "Flat") || p.eqPickerOpen ? Color.accent : (eqMouse.containsMouse ? Color.accent : p.dim)
+          font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8; font.bold: (p.eqText && p.eqText !== "Flat") || p.eqPickerOpen
+          MouseArea {
+            id: eqMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              p.eqPickerOpen = !p.eqPickerOpen
+              if (p.eqPickerOpen) {
+                p.visPickerOpen = false
+                root.lyricsVisible = false
+              }
+            }
+            onContainsMouseChanged: eqTip.visible = containsMouse
           }
         }
       }
@@ -462,6 +483,15 @@ Item {
       anchors.right: parent.right; anchors.rightMargin: Style.space(48)
       anchors.top: parent.top; anchors.topMargin: Style.space(2)
       text: "Speed"; color: Color.accent
+      font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.7
+      z: 9999
+    }
+
+    Text {
+      id: eqTip; visible: false
+      anchors.right: parent.right; anchors.rightMargin: Style.space(72)
+      anchors.top: parent.top; anchors.topMargin: Style.space(2)
+      text: "EQ: " + (p.eqText || "Flat"); color: Color.accent
       font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.7
       z: 9999
     }

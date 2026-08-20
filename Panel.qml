@@ -53,6 +53,7 @@ Panel {
   property string urlInputText: ""
   property string visMode: "bars"
   property bool visPickerOpen: false
+  property bool eqPickerOpen: false
   property var visModes: ["bars", "bars_dot", "bars_outline", "bricks", "columns", "classic_led", "peaks", "wave", "scope", "heartbeat", "retro", "scatter", "flame", "pulse", "matrix", "binary", "butterfly", "sakura", "firework", "bubbles", "rain", "terrain", "logo", "firefly", "geyser", "mosaic", "sand", "stereo", "ascii"]
 
   // Visualizer state
@@ -90,6 +91,7 @@ Panel {
   function close() {
     setCenterHoverRevealSuppressed(false)
     root.visPickerOpen = false
+    root.eqPickerOpen = false
     root.controller.hide()
     runCmd(["stop_spectrum"])
   }
@@ -152,6 +154,10 @@ Panel {
     var next = speeds[(idx + 1) % speeds.length]
     root.playbackSpeed = next
     runCmd(["speed", String(next)])
+  }
+  function setEq(preset) {
+    root.eqText = preset
+    runCmd(["set_eq", preset])
   }
   function doResume() { runCmd(["resume"]); root.resumeVisible = false; root.loadingVid = "" }
 
@@ -403,7 +409,8 @@ Panel {
       anchors.fill: parent
       blocked: trackList.urlInput.activeFocus
       onCloseRequested: {
-        if (root.visPickerOpen) root.visPickerOpen = false
+        if (root.eqPickerOpen) root.eqPickerOpen = false
+        else if (root.visPickerOpen) root.visPickerOpen = false
         else if (playerComp.lyricsVisible) playerComp.toggleLyrics()
         else root.close()
       }
@@ -472,20 +479,29 @@ Panel {
 
         PanelSeparator { foreground: root.foreground }
 
-        TrackList { id: trackList; p: root; visible: !playerComp.lyricsVisible && !root.visPickerOpen }
+        TrackList { id: trackList; p: root; visible: !playerComp.lyricsVisible && !root.visPickerOpen && !root.eqPickerOpen }
 
         // Visualizer Picker (Lazy loaded on demand)
         Loader {
-          visible: root.visPickerOpen
+          visible: root.visPickerOpen && !root.eqPickerOpen
           active: root.visPickerOpen
           width: parent.width
           source: "VisPicker.qml"
           onLoaded: { if (item) item.p = root }
         }
 
+        // Equalizer Profile Picker (Lazy loaded on demand)
+        Loader {
+          visible: root.eqPickerOpen
+          active: root.eqPickerOpen
+          width: parent.width
+          source: "EqPicker.qml"
+          onLoaded: { if (item) item.p = root }
+        }
+
         // Lyrics view — replaces track list when toggled
         Item {
-          visible: playerComp.lyricsVisible && !root.visPickerOpen
+          visible: playerComp.lyricsVisible && !root.visPickerOpen && !root.eqPickerOpen
           width: parent.width
           height: Style.space(200)
 
