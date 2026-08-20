@@ -373,55 +373,53 @@ Item {
         }
       }
 
-      // Visualizer Canvas Frame with Vibrant Aurora & Artwork Projection
+      // Visualizer Canvas Frame with Vibrant Chromatic Aurora
       BorderSurface {
         width: parent.width
         height: Style.space(52)
         radius: Style.space(4)
         clip: true
-        color: "#07080b"
-        borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.35 + root.beatDropPulse * 0.45) : Qt.rgba(1, 1, 1, 0.10), 1)
+        color: "#080a0f"
+        borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.45 + root.beatDropPulse * 0.40) : Qt.rgba(1, 1, 1, 0.12), 1)
 
-        // 1. Blurred Album Artwork Projection
-        Image {
-          anchors.fill: parent
-          source: p.artPath
-          fillMode: Image.PreserveAspectCrop
-          visible: p.artPath !== ""
-          opacity: p.isPlaying ? 0.32 : 0.10
-          smooth: true
-          z: 0
-        }
-
-        // 2. Vibrant Aurora Ambient Gradient (Breathes on beat drops)
+        // 1. Deep Vibrant Multi-Stop Aurora Gradient
         Rectangle {
           anchors.fill: parent
-          z: 1
+          z: 0
           gradient: Gradient {
             orientation: Gradient.Vertical
-            GradientStop { position: 0.0; color: Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, p.isPlaying ? (0.24 + root.beatDropPulse * 0.26) : 0.06) }
-            GradientStop { position: 0.45; color: Qt.rgba(0.04, 0.05, 0.08, 0.82) }
-            GradientStop { position: 1.0; color: Qt.rgba(p.dynamicAccent.r * 0.6, p.dynamicAccent.g * 0.5, p.dynamicAccent.b * 0.9, p.isPlaying ? (0.20 + root.beatDropPulse * 0.20) : 0.05) }
+            GradientStop {
+              position: 0.0
+              color: Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, p.isPlaying ? (0.35 + root.beatDropPulse * 0.25) : 0.08)
+            }
+            GradientStop {
+              position: 0.50
+              color: Qt.rgba(0.04, 0.05, 0.09, 0.85)
+            }
+            GradientStop {
+              position: 1.0
+              color: Qt.rgba(p.dynamicAccent.b * 0.9, p.dynamicAccent.r * 0.6 + 0.1, p.dynamicAccent.g * 0.8, p.isPlaying ? (0.30 + root.beatDropPulse * 0.20) : 0.06)
+            }
           }
         }
 
-        // 3. Central Luminous Aurora Core (Pulsing sound light)
+        // 2. Central Radiant Neon Glow (Pulses with live kicks and sound energy)
         Rectangle {
           anchors.centerIn: parent
-          width: parent.width * 0.75
-          height: parent.height * 0.85
+          width: parent.width * 0.80
+          height: parent.height * 0.90
           radius: height / 2
           color: p.dynamicAccent
-          opacity: p.isPlaying ? (0.12 + root.beatDropPulse * 0.20) : 0.0
-          z: 2
+          opacity: p.isPlaying ? (0.22 + root.beatDropPulse * 0.30) : 0.02
+          z: 1
         }
 
-        // 4. Subtle Top Glass Highlight
+        // 3. Crisp Glass Prism Top Shimmer
         Rectangle {
           anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
           height: 1
-          color: Qt.rgba(1, 1, 1, 0.22)
-          z: 3
+          color: Qt.rgba(1, 1, 1, 0.25)
+          z: 2
         }
 
         Canvas {
