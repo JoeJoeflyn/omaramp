@@ -1,12 +1,11 @@
-// LED Scrubber — Retro Digital Hardware Segmented LED Matrix Scrubber
+// LED Scrubber — Retro Digital Hardware Segmented LED Matrix Visualizer with full vibrant color
 .pragma library
 .import "helpers.js" as H
 
 function render(ctx, d) {
   var bands = d.bands || []
-  var w = d.width, h = d.height
+  var w = d.width, h = d.height, frame = d.frame || 0
   var isPlaying = d.playing
-  var progress = d.progress !== undefined ? d.progress : (d.state ? d.state.progress || 0 : 0)
   var beatDrop = d.beatDrop || 0
   var midY = h / 2.0
 
@@ -20,7 +19,6 @@ function render(ctx, d) {
   var colW = Math.max(2.5, (totalDrawW - (numCols - 1) * gap) / numCols)
   var actualW = numCols * colW + (numCols - 1) * gap
   var startX = margin + (totalDrawW - actualW) / 2.0
-  var playheadX = startX + progress * actualW
 
   // LED block metrics (11 vertical segments per column)
   var numSegs = 11
@@ -29,7 +27,7 @@ function render(ctx, d) {
   var totalMatrixH = numSegs * segH + (numSegs - 1) * segGap
   var matrixStartY = midY - (totalMatrixH / 2.0)
 
-  // Segment colors (from center outwards: neon cyan/green -> yellow -> hot red/magenta)
+  // Segment colors (from center outwards: electric cyan -> green -> yellow -> orange -> hot red)
   var segColors = [
     "rgba(255, 60, 90, 0.95)",   // Outer top (Peak Red)
     "rgba(255, 140, 30, 0.95)",  // High (Orange)
@@ -46,8 +44,6 @@ function render(ctx, d) {
 
   for (var col = 0; col < numCols; col++) {
     var cx = startX + col * (colW + gap)
-    var colCenter = cx + colW / 2.0
-    var isPlayed = colCenter <= playheadX
 
     // Track dynamic profile envelope
     var env = Math.sin((col / numCols) * Math.PI)
@@ -67,36 +63,16 @@ function render(ctx, d) {
       var isLit = distFromCenter <= activeRadius
 
       if (isLit) {
-        if (isPlayed) {
-          // ── Played & Lit: Vivid glowing LED block ──
-          ctx.fillStyle = segColors[s]
-        } else {
-          // ── Unplayed & Lit: Dim illuminated LED ──
-          ctx.fillStyle = "rgba(255, 255, 255, 0.35)"
-        }
+        // ── Fully lit glowing LED block ──
+        ctx.fillStyle = segColors[s]
       } else {
-        // ── Unlit: Dark unlit LED matrix cell silhouette ──
-        ctx.fillStyle = isPlayed ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.04)"
+        // ── Unlit dark LED matrix cell silhouette ──
+        ctx.fillStyle = "rgba(255, 255, 255, 0.06)"
       }
 
       ctx.beginPath()
       H.roundedRect(ctx, cx, sy, colW, segH, 0.8)
       ctx.fill()
     }
-  }
-
-  // ── Digital Cursor Playhead ──
-  if (isPlaying && actualW > 0) {
-    var curX = Math.max(startX, Math.min(startX + actualW, playheadX))
-
-    ctx.fillStyle = "#ffffff"
-    ctx.fillRect(curX - 1, matrixStartY - 2, 2, totalMatrixH + 4)
-
-    // Glowing top & bottom LED dots
-    ctx.beginPath()
-    ctx.arc(curX, matrixStartY - 2, 2.0, 0, Math.PI * 2)
-    ctx.arc(curX, matrixStartY + totalMatrixH + 2, 2.0, 0, Math.PI * 2)
-    ctx.fillStyle = "#00ffff"
-    ctx.fill()
   }
 }
