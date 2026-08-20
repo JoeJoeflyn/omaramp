@@ -130,7 +130,7 @@ Item {
     "terrain": "Terrain", "logo": "Logo", "firefly": "Firefly",
     "geyser": "Geyser", "mosaic": "Mosaic", "sand": "Sand",
     "stereo": "Stereo", "ascii": "Ascii", "sine": "Sine Wave",
-    "siriwave": "SiriWave (iOS 9)"
+    "siriwave": "Siri Wave"
   })
 
   function requestPaint() { if (visCanvas) visCanvas.requestPaint() }
