@@ -81,12 +81,21 @@ def run():
                     decay_bands[i] = max(0.0, mag * 0.25 + decay_bands[i] * 0.75)
                 cur_bands.append(round(decay_bands[i], 3))
 
-            # Downsample raw waveform for scope/wave modes, with gain
-            step = max(1, CHUNK // WAVE_SAMPLES)
-            wave_raw = [raw[i] for i in range(0, CHUNK, step)][:WAVE_SAMPLES]
-            # Normalize: amplify quiet signals so waveform is visible
+            # Trigger alignment: find positive zero-crossing to stabilize oscilloscope waveform
+            trig_idx = 0
+            for i in range(1, min(CHUNK // 2, 600)):
+                if raw[i - 1] <= 0.0 and raw[i] > 0.0:
+                    trig_idx = i
+                    break
+
+            step = max(1, (CHUNK - trig_idx) // WAVE_SAMPLES)
+            wave_raw = [raw[trig_idx + i * step] for i in range(WAVE_SAMPLES) if (trig_idx + i * step) < CHUNK]
+            if len(wave_raw) < WAVE_SAMPLES:
+                wave_raw += [0.0] * (WAVE_SAMPLES - len(wave_raw))
+
+            # Normalize: amplify quiet signals so waveform is clean and legible
             peak = max(abs(x) for x in wave_raw) if wave_raw else 0
-            gain = min(50.0, 0.7 / peak) if peak > 0.001 else 1.0
+            gain = min(35.0, 0.75 / peak) if peak > 0.005 else 1.0
             wave = [round(max(-1.0, min(1.0, x * gain)), 4) for x in wave_raw]
 
             tmp_out = OUT_FILE + ".tmp"

@@ -24,6 +24,7 @@ BorderSurface {
     // Wave & Scope
     { id: "wave", name: "Waveform", category: "scope", icon: "\uf21e" },
     { id: "scope", name: "XY Scope", category: "scope", icon: "\uf1fe" },
+    { id: "sine", name: "Sine Wave", category: "scope", icon: "\uf1d8" },
     { id: "heartbeat", name: "Heartbeat", category: "scope", icon: "\uf004" },
 
     // Synth & Retro
@@ -82,7 +83,7 @@ BorderSurface {
       Text {
         width: parent.width - Style.space(48)
         anchors.verticalCenter: parent.verticalCenter
-        text: "Visualizer Styles (29)"
+        text: "Visualizer Styles (30)"
         color: p ? p.foreground : "#fff"
         font.family: p ? p.fontFamily : "sans-serif"
         font.pixelSize: Style.font.caption; font.bold: true
