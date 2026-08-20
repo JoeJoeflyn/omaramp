@@ -22,7 +22,7 @@ BorderSurface {
     { id: "ascii", name: "ASCII", category: "classic", icon: "\uf121" },
 
     // Wave & Scope
-    { id: "siriwave", name: "SiriWave", category: "scope", icon: "\uf179" },
+    { id: "siriwave", name: "Siri Wave", category: "scope", icon: "\uf179" },
     { id: "wave", name: "Waveform", category: "scope", icon: "\uf21e" },
     { id: "scope", name: "XY Scope", category: "scope", icon: "\uf1fe" },
     { id: "sine", name: "Sine Wave", category: "scope", icon: "\uf1d8" },

@@ -452,21 +452,100 @@ Item {
         }
       }
 
-      // Seek Bar
+      // Waveform Scrubber (SoundCloud / WaveformScrubber style with dual-color played tint and playhead needle)
       Item {
         id: seekBar
         width: parent.width
-        implicitHeight: Style.space(12)
+        implicitHeight: Style.space(18)
         property int hoverSecs: -1
+        property var waveformCache: []
+        property string cachedTrack: ""
 
-        Rectangle {
-          anchors.verticalCenter: parent.verticalCenter
-          width: parent.width; height: Style.space(4); radius: Style.space(2)
-          color: Color.popups.border
+        // Generate track waveform profile (54 sample bars)
+        function getWaveform() {
+          if (cachedTrack === p.currentTrack && waveformCache.length > 0) return waveformCache
+          cachedTrack = p.currentTrack
+          var bars = []
+          var seed = 0
+          for (var c = 0; c < cachedTrack.length; c++) {
+            seed = (seed * 31 + cachedTrack.charCodeAt(c)) & 0xffffff
+          }
+          if (seed === 0) seed = 12345
+          var count = 54
+          for (var i = 0; i < count; i++) {
+            var env = Math.sin((i / count) * Math.PI)
+            var pseudo = ((Math.sin(i * 12.9898 + seed) * 43758.5453) % 1 + 1) % 1
+            var pseudo2 = ((Math.cos(i * 4.1414 + seed * 0.5) * 23421.631) % 1 + 1) % 1
+            var amp = 0.15 + (env * 0.45) + (pseudo * 0.25) + (pseudo2 * 0.15)
+            bars.push(Math.max(0.14, Math.min(1.0, amp)))
+          }
+          waveformCache = bars
+          return bars
+        }
 
-          Rectangle {
-            width: Math.max(Style.space(4), parent.width * p.progress)
-            height: parent.height; radius: Style.space(2); color: p.dynamicAccent
+        Canvas {
+          id: waveScrubberCanvas
+          anchors.fill: parent
+          anchors.margins: Style.space(1)
+
+          Connections {
+            target: p
+            function onProgressChanged() { waveScrubberCanvas.requestPaint() }
+            function onDynamicAccentChanged() { waveScrubberCanvas.requestPaint() }
+            function onCurrentTrackChanged() { waveScrubberCanvas.requestPaint() }
+          }
+
+          onPaint: {
+            var ctx = getContext("2d")
+            ctx.clearRect(0, 0, width, height)
+            var bars = seekBar.getWaveform()
+            var count = bars.length
+            var gap = 2
+            var barW = Math.max(2, Math.floor((width - (count - 1) * gap) / count))
+            var totalW = count * barW + (count - 1) * gap
+            var startX = Math.floor((width - totalW) / 2)
+            var midY = height / 2.0
+            var playX = width * p.progress
+
+            var acc = p.dynamicAccent
+            var ar = Math.round(acc.r * 255), ag = Math.round(acc.g * 255), ab = Math.round(acc.b * 255)
+
+            for (var i = 0; i < count; i++) {
+              var bx = startX + i * (barW + gap)
+              var barCenter = bx + barW / 2.0
+              var isPlayed = barCenter <= playX
+              var val = bars[i]
+
+              var barH = Math.max(3, val * (height * 0.85))
+              var by = midY - barH / 2.0
+              var r = barW / 2.0
+
+              if (isPlayed) {
+                var grad = ctx.createLinearGradient(0, by, 0, by + barH)
+                grad.addColorStop(0, "rgba(255, 255, 255, 0.95)")
+                grad.addColorStop(0.4, "rgba(" + ar + "," + ag + "," + ab + ", 0.95)")
+                grad.addColorStop(1, "rgba(" + Math.round(ar * 0.7) + "," + Math.round(ag * 0.7) + "," + Math.round(ab * 0.7) + ", 0.80)")
+                ctx.fillStyle = grad
+              } else {
+                ctx.fillStyle = "rgba(255, 255, 255, 0.18)"
+              }
+
+              ctx.beginPath()
+              ctx.arc(bx + r, by + r, r, Math.PI, 0, false)
+              ctx.lineTo(bx + barW, by + barH - r)
+              ctx.arc(bx + r, by + barH - r, r, 0, Math.PI, false)
+              ctx.closePath()
+              ctx.fill()
+            }
+
+            // Playhead Cursor Needle
+            if (p.totalSecs > 0) {
+              var curX = Math.max(1, Math.min(width - 1, playX))
+              ctx.fillStyle = "#ffffff"
+              ctx.beginPath()
+              ctx.rect(curX - 1, 0, 2, height)
+              ctx.fill()
+            }
           }
         }
 
@@ -480,7 +559,7 @@ Item {
           }
           color: p.foreground; font.family: p.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
           x: Math.max(0, Math.min(parent.width - width, seekMouse.mouseX - width / 2))
-          y: -height - 2
+          y: -height - 4
 
           Rectangle {
             z: -1; anchors.fill: parent; anchors.margins: -2
