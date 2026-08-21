@@ -84,6 +84,12 @@ Panel {
   }
 
   // ---- Lifecycle
+  Component.onCompleted: {
+    loadPlaylists()
+    loadHistory()
+    loadQueue()
+  }
+
   function open() {
     openedFromHotkey = false
     setCenterHoverRevealSuppressed(false)
@@ -91,6 +97,8 @@ Panel {
     Qt.callLater(function() {
       root.refresh()
       loadHistory()
+      loadPlaylists()
+      loadQueue()
       runCmd(["start_spectrum"])
     })
   }
@@ -101,6 +109,8 @@ Panel {
     Qt.callLater(function() {
       root.refresh()
       loadHistory()
+      loadPlaylists()
+      loadQueue()
       runCmd(["start_spectrum"])
       if (root.opened) setCenterHoverRevealSuppressed(true)
     })

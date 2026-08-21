@@ -328,11 +328,25 @@ def parse_history(limit=500):
             with open(HISTORY_PATH, "rb") as f:
                 data = tomllib.load(f)
             entries = []
+            seen_keys = set()
             for item in reversed(data.get("entry", [])):
-                if item.get("title") or item.get("path"):
-                    m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", str(item.get("path", "")))
+                title = str(item.get("title") or "").strip()
+                path = str(item.get("path") or "").strip()
+                artist = str(item.get("artist") or "").strip()
+                if title or path:
+                    m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", path)
                     if m:
-                        item["thumb"] = os.path.join(AUDIO_CACHE_DIR, f"{m.group(1)}.jpg")
+                        vid_id = m.group(1)
+                        dedup_key = f"yt:{vid_id}"
+                        item["thumb"] = os.path.join(AUDIO_CACHE_DIR, f"{vid_id}.jpg")
+                    elif path:
+                        dedup_key = f"path:{path}"
+                    else:
+                        dedup_key = f"meta:{title.lower()}::{artist.lower()}"
+
+                    if dedup_key in seen_keys:
+                        continue
+                    seen_keys.add(dedup_key)
                     entries.append(item)
                 if len(entries) >= limit:
                     break
