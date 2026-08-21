@@ -47,36 +47,91 @@ try:
 except Exception:
     pass
 
-def is_pid_alive(pid):
-    """Check if process with given PID exists and belongs to current user."""
-    if not pid or pid <= 0:
+def get_process_starttime(pid):
+    """Retrieve process start time from /proc/<pid>/stat to detect PID reuse."""
+    try:
+        with open(f"/proc/{pid}/stat", "r") as f:
+            stat_content = f.read()
+        rparen = stat_content.rfind(")")
+        if rparen != -1:
+            fields = stat_content[rparen + 2:].split()
+            if len(fields) >= 20:
+                return int(fields[19])
+    except Exception:
+        pass
+    return None
+
+def verify_process_identity(pid, expected_signature=None, expected_starttime=None):
+    """Verify that PID is alive, owned by current user, matches expected cmdline signature and starttime."""
+    if not pid or not isinstance(pid, int) or pid <= 0:
+        return False
+    proc_dir = f"/proc/{pid}"
+    if not os.path.isdir(proc_dir):
         return False
     try:
-        os.kill(pid, 0)
+        # 1. Check process ownership
+        stat = os.stat(proc_dir)
+        if stat.st_uid != os.getuid():
+            return False
+
+        # 2. Check starttime to ensure PID has not been recycled
+        if expected_starttime is not None:
+            cur_starttime = get_process_starttime(pid)
+            if cur_starttime is None or cur_starttime != expected_starttime:
+                return False
+
+        # 3. Check cmdline signature
+        if expected_signature:
+            cmdline_file = os.path.join(proc_dir, "cmdline")
+            with open(cmdline_file, "rb") as f:
+                raw_cmdline = f.read().decode("utf-8", errors="replace")
+            args = [a for a in raw_cmdline.split("\x00") if a]
+            full_cmd = " ".join(args)
+            if isinstance(expected_signature, str):
+                if expected_signature not in full_cmd:
+                    return False
+            elif isinstance(expected_signature, (list, tuple)):
+                for sig in expected_signature:
+                    if sig not in full_cmd:
+                        return False
         return True
-    except (OSError, ProcessLookupError):
+    except Exception:
         return False
 
-def terminate_tracked_pid(pid_file):
-    """Safely terminate only the specific process recorded in pid_file."""
+def terminate_tracked_pid(pid_file, expected_signature=None):
+    """Safely terminate only the specific process if its identity matches the tracked record."""
     if not os.path.exists(pid_file):
         return
     try:
         with open(pid_file, "r", encoding="utf-8") as f:
-            pid_str = f.read().strip()
-        if pid_str.isdigit():
-            pid = int(pid_str)
-            if is_pid_alive(pid):
-                try:
-                    os.kill(pid, signal.SIGTERM)
-                    for _ in range(6):
-                        time.sleep(0.05)
-                        if not is_pid_alive(pid):
-                            break
-                    if is_pid_alive(pid):
-                        os.kill(pid, signal.SIGKILL)
-                except Exception:
-                    pass
+            content = f.read().strip()
+        
+        pid = None
+        expected_starttime = None
+        sig = expected_signature
+
+        if content.startswith("{"):
+            try:
+                data = json.loads(content)
+                pid = data.get("pid")
+                expected_starttime = data.get("starttime")
+                sig = data.get("signature") or expected_signature
+            except Exception:
+                pass
+        elif content.isdigit():
+            pid = int(content)
+
+        if pid and verify_process_identity(pid, expected_signature=sig, expected_starttime=expected_starttime):
+            try:
+                os.kill(pid, signal.SIGTERM)
+                for _ in range(6):
+                    time.sleep(0.05)
+                    if not verify_process_identity(pid, expected_signature=sig, expected_starttime=expected_starttime):
+                        break
+                if verify_process_identity(pid, expected_signature=sig, expected_starttime=expected_starttime):
+                    os.kill(pid, signal.SIGKILL)
+            except Exception:
+                pass
     except Exception:
         pass
     finally:
@@ -85,12 +140,19 @@ def terminate_tracked_pid(pid_file):
         except Exception:
             pass
 
-def save_tracked_pid(pid_file, pid):
-    """Record spawned process PID with owner-only 0o600 permissions."""
+def save_tracked_proc(pid_file, pid, signature=None):
+    """Record spawned process PID, starttime, and signature with owner-only 0o600 permissions."""
     try:
+        starttime = get_process_starttime(pid)
+        payload = json.dumps({
+            "pid": pid,
+            "signature": signature,
+            "starttime": starttime,
+            "saved_at": time.time()
+        })
         fd = os.open(pid_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with open(fd, "w", encoding="utf-8") as f:
-            f.write(str(pid))
+            f.write(payload)
         try:
             os.chmod(pid_file, 0o600)
         except Exception:
@@ -200,20 +262,25 @@ def start_spectrum_daemon():
     if os.path.exists(SPECTRUM_PID_FILE):
         try:
             with open(SPECTRUM_PID_FILE, "r", encoding="utf-8") as f:
-                pid_str = f.read().strip()
-            if pid_str.isdigit() and is_pid_alive(int(pid_str)):
-                return
+                content = f.read().strip()
+            if content.startswith("{"):
+                d = json.loads(content)
+                if verify_process_identity(d.get("pid"), expected_signature="spectrum.py", expected_starttime=d.get("starttime")):
+                    return
+            elif content.isdigit():
+                if verify_process_identity(int(content), expected_signature="spectrum.py"):
+                    return
         except Exception:
             pass
     try:
         spec_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spectrum.py")
         proc = subprocess.Popen(["python3", spec_script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-        save_tracked_pid(SPECTRUM_PID_FILE, proc.pid)
+        save_tracked_proc(SPECTRUM_PID_FILE, proc.pid, signature="spectrum.py")
     except Exception:
         pass
 
 def stop_spectrum_daemon():
-    terminate_tracked_pid(SPECTRUM_PID_FILE)
+    terminate_tracked_pid(SPECTRUM_PID_FILE, expected_signature="spectrum.py")
 
 def start_mpv_daemon():
     if not is_mpv_running():
@@ -827,8 +894,8 @@ def save_youtube_meta(url, title, artist):
 
 def stream_youtube(url):
     """Stream YouTube audio to mpv via a secure private FIFO pipe — no disk download."""
-    # Terminate previously tracked yt-dlp instance specifically by PID (no pkill)
-    terminate_tracked_pid(STREAM_PID_FILE)
+    # Terminate previously tracked yt-dlp instance specifically by verified PID & signature
+    terminate_tracked_pid(STREAM_PID_FILE, expected_signature=["yt-dlp", STREAM_FIFO])
 
     # Ensure runtime directory exists with strict 0o700 permissions
     os.makedirs(RUN_DIR, mode=0o700, exist_ok=True)
@@ -868,7 +935,7 @@ def stream_youtube(url):
         stderr=subprocess.DEVNULL,
         start_new_session=True
     )
-    save_tracked_pid(STREAM_PID_FILE, proc.pid)
+    save_tracked_proc(STREAM_PID_FILE, proc.pid, signature=["yt-dlp", STREAM_FIFO])
 
 def resolve_track_url(url, title=None, artist=None):
     """Resolves any track item (Spotify URL, query string, or local path) to a playable URL and metadata."""
@@ -934,8 +1001,8 @@ def queue_item(url, title=None, artist=None):
     return {"success": True}
 
 def stop_daemon():
-    terminate_tracked_pid(STREAM_PID_FILE)
-    terminate_tracked_pid(SPECTRUM_PID_FILE)
+    terminate_tracked_pid(STREAM_PID_FILE, expected_signature=["yt-dlp", STREAM_FIFO])
+    terminate_tracked_pid(SPECTRUM_PID_FILE, expected_signature="spectrum.py")
     if os.path.exists(SOCK_PATH):
         send_mpv_cmd(["quit"])
         try:
