@@ -718,45 +718,61 @@ Panel {
               color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.font.caption
             }
 
-            Column {
+            ListView {
+              id: lyricsList
               visible: playerComp.lyricsLines.length > 0
-              anchors.centerIn: parent
-              width: parent.width - Style.space(24)
-              spacing: Style.space(8)
+              anchors.top: lyricsHeader.bottom
+              anchors.bottom: parent.bottom
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.margins: Style.space(8)
+              clip: true
+              model: playerComp.lyricsLines
+              spacing: Style.space(6)
+              boundsBehavior: Flickable.StopAtBounds
 
-              Text {
-                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
-                textFormat: Text.PlainText
-                text: {
-                  var i = playerComp.lyricsCurrentIdx - 1
-                  return (i >= 0 && playerComp.lyricsLines[i]) ? playerComp.lyricsLines[i].text : ""
+              Connections {
+                target: playerComp
+                function onLyricsCurrentIdxChanged() {
+                  if (playerComp.lyricsCurrentIdx >= 0 && playerComp.lyricsCurrentIdx < playerComp.lyricsLines.length) {
+                    lyricsList.positionViewAtIndex(playerComp.lyricsCurrentIdx, ListView.Center)
+                  }
                 }
-                color: Qt.rgba(1, 1, 1, 0.25); font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
               }
 
-              Text {
-                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
-                textFormat: Text.PlainText
-                text: {
-                  var i = playerComp.lyricsCurrentIdx
-                  if (i < 0 || !playerComp.lyricsLines[i]) return "♪ ♪ ♪"
-                  return playerComp.lyricsLines[i].text || "♪"
-                }
-                color: Color.accent; font.family: root.fontFamily
-                font.pixelSize: Style.font.body; font.bold: true
-              }
+              delegate: Item {
+                required property var modelData
+                required property int index
+                readonly property bool isCurrent: index === playerComp.lyricsCurrentIdx
+                readonly property bool isPast: playerComp.lyricsCurrentIdx >= 0 && index < playerComp.lyricsCurrentIdx
+                width: lyricsList.width
+                implicitHeight: lyricText.implicitHeight + Style.space(4)
 
-              Text {
-                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
-                textFormat: Text.PlainText
-                text: {
-                  var i = playerComp.lyricsCurrentIdx + 1
-                  if (i < 0 || !playerComp.lyricsLines[i]) return ""
-                  return playerComp.lyricsLines[i].text || ""
+                MouseArea {
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: modelData.time >= 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+                  onClicked: {
+                    if (modelData.time >= 0) {
+                      root.seekTo(modelData.time)
+                    }
+                  }
                 }
-                color: Qt.rgba(1, 1, 1, 0.35); font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
+
+                Text {
+                  id: lyricText
+                  anchors.left: parent.left
+                  anchors.right: parent.right
+                  horizontalAlignment: Text.AlignHCenter
+                  wrapMode: Text.Wrap
+                  textFormat: Text.PlainText
+                  text: modelData.text || "♪"
+                  color: isCurrent ? root.dynamicAccent : (isPast ? Qt.rgba(1, 1, 1, 0.28) : Qt.rgba(1, 1, 1, 0.65))
+                  font.family: root.fontFamily
+                  font.pixelSize: isCurrent ? Style.font.body : Style.font.caption
+                  font.bold: isCurrent
+                  Behavior on color { ColorAnimation { duration: 250 } }
+                }
               }
             }
           }

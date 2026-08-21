@@ -713,8 +713,8 @@ def get_status():
             "url": np.get("url", ""),
             "time_current": format_seconds(cur_s),
             "time_total": format_seconds(tot_s),
-            "cur_secs": int(cur_s),
-            "total_secs": int(tot_s),
+            "cur_secs": round(cur_s, 2),
+            "total_secs": round(tot_s, 2),
             "progress": round(prog, 3),
             "volume_db": round((vol / 100.0) * 36.0 - 30.0, 1),
             "volume_pct": vol,
@@ -836,41 +836,63 @@ def fetch_lyrics(title, artist, url=""):
     if key in LYRICS_CACHE:
         return LYRICS_CACHE[key]
     try:
-        search_title = re.sub(r'\s*[\(\[].*[\)\]]', '', title or "").strip()
-        search_artist = (artist or "").strip()
+        raw_t = (title or "").strip()
+        raw_a = (artist or "").strip()
 
-        # If title is short and we have a YouTube URL, get the real full title
-        if " - " not in search_title and is_youtube_url(url or ""):
+        # If title is generic and we have a YouTube URL, fetch actual video title
+        if (not raw_t or raw_t in ("Omaramp", "omaramp_stream") or " - " not in raw_t) and is_youtube_url(url or ""):
             try:
                 vid = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", url).group(1)
                 r = subprocess.run(["yt-dlp", "--no-warnings", "--print", "%(title)s", "--", f"https://www.youtube.com/watch?v={vid}"],
                                    capture_output=True, text=True, timeout=5)
                 full_title = r.stdout.strip()
-                if full_title and " - " in full_title:
-                    search_title = re.sub(r'\s*[\(\[].*[\)\]]', '', full_title).strip()
-                    parts = search_title.split(" - ", 1)
-                    search_artist = parts[0].strip()
-                    search_title = parts[1].strip()
+                if full_title:
+                    raw_t = full_title
             except Exception:
                 pass
 
-        # If title has "Artist - Track", split it
-        if " - " in search_title:
-            parts = search_title.split(" - ", 1)
-            search_artist = parts[0].strip()
-            search_title = parts[1].strip()
+        # Strip video/audio metadata tags
+        clean_t = re.sub(r"(?i)\s*[\(\[](?:official|music|video|audio|lyrics?|4k|hd|remaster(?:ed)?|lyric video|visualizer|hq|clip|explicit).*?[\)\]]", "", raw_t)
+        clean_t = re.sub(r"\s*[\(\[].*?[\)\]]", "", clean_t).strip()
+        clean_a = raw_a
 
-        # Try with artist
+        if " - " in clean_t and not clean_a:
+            parts = clean_t.split(" - ", 1)
+            clean_a = parts[0].strip()
+            clean_t = parts[1].strip()
+
         data = []
-        if search_artist:
-            u = f"https://lrclib.net/api/search?artist_name={urllib.parse.quote(search_artist)}&track_name={urllib.parse.quote(search_title)}"
-            res = urllib.request.urlopen(u, timeout=5)
-            data = json.loads(res.read())
-        # Fallback: track name only
-        if not data:
-            u = f"https://lrclib.net/api/search?q={urllib.parse.quote(search_title)}"
-            res = urllib.request.urlopen(u, timeout=5)
-            data = json.loads(res.read())
+        # Strategy 1: Search with specific artist and track
+        if clean_a and clean_t:
+            try:
+                u = f"https://lrclib.net/api/search?artist_name={urllib.parse.quote(clean_a)}&track_name={urllib.parse.quote(clean_t)}"
+                req = urllib.request.Request(u, headers={"User-Agent": "Omaramp/1.0 (Linux)"})
+                res = urllib.request.urlopen(req, timeout=5)
+                data = json.loads(res.read().decode("utf-8"))
+            except Exception:
+                pass
+
+        # Strategy 2: Query search with both artist + title
+        if not data and (clean_t or clean_a):
+            try:
+                q_str = f"{clean_t} {clean_a}".strip()
+                u = f"https://lrclib.net/api/search?q={urllib.parse.quote(q_str)}"
+                req = urllib.request.Request(u, headers={"User-Agent": "Omaramp/1.0 (Linux)"})
+                res = urllib.request.urlopen(req, timeout=5)
+                data = json.loads(res.read().decode("utf-8"))
+            except Exception:
+                pass
+
+        # Strategy 3: Fallback query with original raw title
+        if not data and raw_t and raw_t != clean_t:
+            try:
+                u = f"https://lrclib.net/api/search?q={urllib.parse.quote(raw_t)}"
+                req = urllib.request.Request(u, headers={"User-Agent": "Omaramp/1.0 (Linux)"})
+                res = urllib.request.urlopen(req, timeout=5)
+                data = json.loads(res.read().decode("utf-8"))
+            except Exception:
+                pass
+
         result = {"synced": "", "plain": "", "source": ""}
         for e in data:
             if e.get("syncedLyrics"):
@@ -881,6 +903,7 @@ def fetch_lyrics(title, artist, url=""):
                 if e.get("plainLyrics"):
                     result = {"synced": "", "plain": e["plainLyrics"], "source": "lrclib"}
                     break
+
         LYRICS_CACHE[key] = result
         return result
     except Exception:

@@ -87,24 +87,54 @@ Item {
     lyricsLines = []
     lyricsCurrentIdx = -1
     lyricsTrack = p.currentTrack
-    var cmd = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "lyrics", p.currentTrack, p.currentArtist, p.currentUrl]
-    lyricsProc.command = cmd
-    Qt.callLater(function() { lyricsProc.running = true })
+    lyricsProc.running = false
+    lyricsProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "lyrics", p.currentTrack, p.currentArtist, p.currentUrl]
+    lyricsProc.running = true
   }
 
   function parseLyrics(raw) {
-    var lines = [], re = /\[(\d+):(\d+\.\d+)\](.*)/g, m
-    while ((m = re.exec(raw)) !== null)
-      lines.push({ time: parseInt(m[1]) * 60 + parseFloat(m[2]), text: m[3].trim() })
-    lyricsLines = lines.length ? lines : (raw ? raw.split("\n").map(function(t) { return { time: -1, text: t.trim() } }) : [])
+    if (!raw || typeof raw !== "string") {
+      lyricsLines = []
+      return
+    }
+    var lines = []
+    var rawLines = raw.split("\n")
+    var timeRe = /\[(\d{1,2}):(\d{1,2}(?:\.\d+)?)\]/g
+    for (var i = 0; i < rawLines.length; i++) {
+      var l = rawLines[i].trim()
+      if (!l) continue
+      var match
+      var times = []
+      var textStart = 0
+      while ((match = timeRe.exec(l)) !== null) {
+        var min = parseInt(match[1])
+        var sec = parseFloat(match[2])
+        times.push(min * 60 + sec)
+        textStart = timeRe.lastIndex
+      }
+      var lineText = l.slice(textStart).trim()
+      if (times.length > 0) {
+        for (var t = 0; t < times.length; t++) {
+          lines.push({ time: times[t], text: lineText })
+        }
+      } else if (lineText) {
+        lines.push({ time: -1, text: lineText })
+      }
+    }
+    lines.sort(function(a, b) { return a.time - b.time })
+    lyricsLines = lines
+    updateLyricsPosition(p.curSecs)
   }
 
   function updateLyricsPosition(sec) {
-    if (!lyricsVisible || !lyricsLines.length) return
+    if (!lyricsVisible || !lyricsLines || !lyricsLines.length) return
     var idx = -1
     for (var i = 0; i < lyricsLines.length; i++) {
-      if (lyricsLines[i].time >= 0 && lyricsLines[i].time <= sec) idx = i
-      else if (lyricsLines[i].time > sec) break
+      if (lyricsLines[i].time >= 0 && lyricsLines[i].time <= (sec + 0.15)) {
+        idx = i
+      } else if (lyricsLines[i].time > (sec + 0.15)) {
+        break
+      }
     }
     if (idx !== lyricsCurrentIdx) {
       lyricsCurrentIdx = idx
