@@ -61,10 +61,15 @@ def get_process_starttime(pid):
         pass
     return None
 
-def verify_process_identity(pid, expected_signature=None, expected_starttime=None):
-    """Verify that PID is alive, owned by current user, matches expected cmdline signature and starttime."""
-    if not pid or not isinstance(pid, int) or pid <= 0:
+def verify_process_identity(pid, expected_signature, expected_starttime):
+    """Verify that PID is alive, owned by current user, strictly matches expected starttime and cmdline signature."""
+    if not isinstance(pid, int) or pid <= 0:
         return False
+    if not isinstance(expected_starttime, int) or expected_starttime <= 0:
+        return False
+    if not expected_signature:
+        return False
+
     proc_dir = f"/proc/{pid}"
     if not os.path.isdir(proc_dir):
         return False
@@ -74,54 +79,49 @@ def verify_process_identity(pid, expected_signature=None, expected_starttime=Non
         if stat.st_uid != os.getuid():
             return False
 
-        # 2. Check starttime to ensure PID has not been recycled
-        if expected_starttime is not None:
-            cur_starttime = get_process_starttime(pid)
-            if cur_starttime is None or cur_starttime != expected_starttime:
-                return False
+        # 2. Strictly check starttime to guarantee PID has not been recycled
+        cur_starttime = get_process_starttime(pid)
+        if cur_starttime is None or cur_starttime != expected_starttime:
+            return False
 
         # 3. Check cmdline signature
-        if expected_signature:
-            cmdline_file = os.path.join(proc_dir, "cmdline")
-            with open(cmdline_file, "rb") as f:
-                raw_cmdline = f.read().decode("utf-8", errors="replace")
-            args = [a for a in raw_cmdline.split("\x00") if a]
-            full_cmd = " ".join(args)
-            if isinstance(expected_signature, str):
-                if expected_signature not in full_cmd:
+        cmdline_file = os.path.join(proc_dir, "cmdline")
+        with open(cmdline_file, "rb") as f:
+            raw_cmdline = f.read().decode("utf-8", errors="replace")
+        args = [a for a in raw_cmdline.split("\x00") if a]
+        full_cmd = " ".join(args)
+        if isinstance(expected_signature, str):
+            if expected_signature not in full_cmd:
+                return False
+        elif isinstance(expected_signature, (list, tuple)):
+            for sig in expected_signature:
+                if sig not in full_cmd:
                     return False
-            elif isinstance(expected_signature, (list, tuple)):
-                for sig in expected_signature:
-                    if sig not in full_cmd:
-                        return False
         return True
     except Exception:
         return False
 
-def terminate_tracked_pid(pid_file, expected_signature=None):
-    """Safely terminate only the specific process if its identity matches the tracked record."""
+def terminate_tracked_pid(pid_file, expected_signature):
+    """Safely terminate only the specific process if its identity matches the tracked JSON record with bound starttime.
+    Legacy or malformed PID files are strictly cleaned up without signaling."""
     if not os.path.exists(pid_file):
         return
     try:
         with open(pid_file, "r", encoding="utf-8") as f:
             content = f.read().strip()
-        
-        pid = None
-        expected_starttime = None
-        sig = expected_signature
 
-        if content.startswith("{"):
-            try:
-                data = json.loads(content)
-                pid = data.get("pid")
-                expected_starttime = data.get("starttime")
-                sig = data.get("signature") or expected_signature
-            except Exception:
-                pass
-        elif content.isdigit():
-            pid = int(content)
+        # Strictly require JSON record containing bound starttime — reject legacy numeric formats
+        if not content.startswith("{"):
+            return
 
-        if pid and verify_process_identity(pid, expected_signature=sig, expected_starttime=expected_starttime):
+        data = json.loads(content)
+        pid = data.get("pid")
+        expected_starttime = data.get("starttime")
+        sig = data.get("signature") or expected_signature
+
+        if (isinstance(pid, int) and pid > 0 and 
+            isinstance(expected_starttime, int) and expected_starttime > 0 and
+            verify_process_identity(pid, expected_signature=sig, expected_starttime=expected_starttime)):
             try:
                 os.kill(pid, signal.SIGTERM)
                 for _ in range(6):
@@ -265,10 +265,11 @@ def start_spectrum_daemon():
                 content = f.read().strip()
             if content.startswith("{"):
                 d = json.loads(content)
-                if verify_process_identity(d.get("pid"), expected_signature="spectrum.py", expected_starttime=d.get("starttime")):
-                    return
-            elif content.isdigit():
-                if verify_process_identity(int(content), expected_signature="spectrum.py"):
+                pid = d.get("pid")
+                st = d.get("starttime")
+                if (isinstance(pid, int) and pid > 0 and 
+                    isinstance(st, int) and st > 0 and 
+                    verify_process_identity(pid, expected_signature="spectrum.py", expected_starttime=st)):
                     return
         except Exception:
             pass
