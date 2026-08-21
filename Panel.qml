@@ -135,10 +135,22 @@ Panel {
     if (!statusProc.running) statusProc.running = true
   }
 
-  function togglePlayback() { runCmd(["toggle"]) }
-  function play() { runCmd(["play"]) }
-  function pause() { runCmd(["pause"]) }
-  function stop() { runCmd(["stop"]) }
+  function togglePlayback() {
+    root.playbackState = (root.playbackState === "playing") ? "paused" : "playing"
+    runCmd(["toggle"])
+  }
+  function play() {
+    root.playbackState = "playing"
+    runCmd(["play"])
+  }
+  function pause() {
+    root.playbackState = "paused"
+    runCmd(["pause"])
+  }
+  function stop() {
+    root.playbackState = "stopped"
+    runCmd(["stop"])
+  }
   function nextTrack() { runCmd(["next"]) }
   function prevTrack() { runCmd(["prev"]) }
   function toggleShuffle() { runCmd(["shuffle"]) }
@@ -315,6 +327,7 @@ Panel {
   }
 
   function runCmd(args) {
+    actionProc.running = false
     actionProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", "")].concat(args)
     actionProc.running = true
   }

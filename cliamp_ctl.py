@@ -1049,14 +1049,42 @@ if __name__ == "__main__":
         print(json.dumps(search_tracks(q, 10)))
     elif action == "play":
         start_mpv_daemon()
-        send_mpv_cmd(["set_property", "pause", False])
+        idle_res = send_mpv_cmd(["get_property", "idle-active"])
+        if idle_res and idle_res.get("data") is True:
+            q = read_queue()
+            if q:
+                play_next_in_queue()
+            else:
+                np = read_now_playing()
+                if np.get("url"):
+                    play_track(np.get("url"), np.get("title"), np.get("artist"))
+                else:
+                    hist = parse_history(1)
+                    if hist and hist[0].get("path"):
+                        play_track(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))
+        else:
+            send_mpv_cmd(["set_property", "pause", False])
         print(json.dumps({"success": True}))
     elif action == "pause":
         send_mpv_cmd(["set_property", "pause", True])
         print(json.dumps({"success": True}))
     elif action == "toggle":
         start_mpv_daemon()
-        send_mpv_cmd(["cycle", "pause"])
+        idle_res = send_mpv_cmd(["get_property", "idle-active"])
+        if idle_res and idle_res.get("data") is True:
+            q = read_queue()
+            if q:
+                play_next_in_queue()
+            else:
+                np = read_now_playing()
+                if np.get("url"):
+                    play_track(np.get("url"), np.get("title"), np.get("artist"))
+                else:
+                    hist = parse_history(1)
+                    if hist and hist[0].get("path"):
+                        play_track(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))
+        else:
+            send_mpv_cmd(["cycle", "pause"])
         print(json.dumps({"success": True}))
     elif action == "start_spectrum":
         start_spectrum_daemon()
