@@ -7,6 +7,7 @@ import json
 import socket
 import time
 import re
+import signal
 import urllib.request
 import urllib.parse
 try:
@@ -28,6 +29,9 @@ except Exception:
 
 SOCK_PATH = os.path.join(RUN_DIR, "mpv.sock")
 STREAM_FIFO = os.path.join(RUN_DIR, "stream.fifo")
+STREAM_PID_FILE = os.path.join(RUN_DIR, "stream_ytdlp.pid")
+SPECTRUM_PID_FILE = os.path.join(RUN_DIR, "spectrum.pid")
+
 CACHE_DIR = os.path.expanduser("~/.cache/omaramp")
 AUDIO_CACHE_DIR = os.path.join(CACHE_DIR, "audio")
 HISTORY_PATH = os.path.expanduser("~/.config/cliamp/history.toml")
@@ -42,6 +46,57 @@ try:
     os.chmod(AUDIO_CACHE_DIR, 0o700)
 except Exception:
     pass
+
+def is_pid_alive(pid):
+    """Check if process with given PID exists and belongs to current user."""
+    if not pid or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except (OSError, ProcessLookupError):
+        return False
+
+def terminate_tracked_pid(pid_file):
+    """Safely terminate only the specific process recorded in pid_file."""
+    if not os.path.exists(pid_file):
+        return
+    try:
+        with open(pid_file, "r", encoding="utf-8") as f:
+            pid_str = f.read().strip()
+        if pid_str.isdigit():
+            pid = int(pid_str)
+            if is_pid_alive(pid):
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                    for _ in range(6):
+                        time.sleep(0.05)
+                        if not is_pid_alive(pid):
+                            break
+                    if is_pid_alive(pid):
+                        os.kill(pid, signal.SIGKILL)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    finally:
+        try:
+            os.remove(pid_file)
+        except Exception:
+            pass
+
+def save_tracked_pid(pid_file, pid):
+    """Record spawned process PID with owner-only 0o600 permissions."""
+    try:
+        fd = os.open(pid_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with open(fd, "w", encoding="utf-8") as f:
+            f.write(str(pid))
+        try:
+            os.chmod(pid_file, 0o600)
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 def read_queue():
     if os.path.exists(QUEUE_PATH):
@@ -142,19 +197,23 @@ def is_mpv_running():
     return res is not None and res.get("error") == "success"
 
 def start_spectrum_daemon():
+    if os.path.exists(SPECTRUM_PID_FILE):
+        try:
+            with open(SPECTRUM_PID_FILE, "r", encoding="utf-8") as f:
+                pid_str = f.read().strip()
+            if pid_str.isdigit() and is_pid_alive(int(pid_str)):
+                return
+        except Exception:
+            pass
     try:
-        res = subprocess.run(["pgrep", "-f", "omaramp/spectrum.py"], capture_output=True, text=True)
-        if not res.stdout.strip():
-            spec_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spectrum.py")
-            subprocess.Popen(["python3", spec_script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        spec_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spectrum.py")
+        proc = subprocess.Popen(["python3", spec_script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        save_tracked_pid(SPECTRUM_PID_FILE, proc.pid)
     except Exception:
         pass
 
 def stop_spectrum_daemon():
-    try:
-        subprocess.run(["pkill", "-f", "omaramp/spectrum.py"], capture_output=True)
-    except Exception:
-        pass
+    terminate_tracked_pid(SPECTRUM_PID_FILE)
 
 def start_mpv_daemon():
     if not is_mpv_running():
@@ -768,11 +827,8 @@ def save_youtube_meta(url, title, artist):
 
 def stream_youtube(url):
     """Stream YouTube audio to mpv via a secure private FIFO pipe — no disk download."""
-    # Kill any previous yt-dlp stream process
-    try:
-        subprocess.run(["pkill", "-f", "yt-dlp.*stream\\.fifo"], capture_output=True)
-    except Exception:
-        pass
+    # Terminate previously tracked yt-dlp instance specifically by PID (no pkill)
+    terminate_tracked_pid(STREAM_PID_FILE)
 
     # Ensure runtime directory exists with strict 0o700 permissions
     os.makedirs(RUN_DIR, mode=0o700, exist_ok=True)
@@ -806,12 +862,13 @@ def stream_youtube(url):
     read_fd = os.open(STREAM_FIFO, os.O_RDONLY | os.O_NONBLOCK)
     write_fd = os.open(STREAM_FIFO, os.O_WRONLY)
     os.close(read_fd)  # Close our dummy reader — mpv will take over
-    subprocess.Popen(
+    proc = subprocess.Popen(
         ["yt-dlp", "--no-warnings", "-f", "18/best", "-o", "-", "--", url],
         stdout=os.fdopen(write_fd, "wb"),
         stderr=subprocess.DEVNULL,
         start_new_session=True
     )
+    save_tracked_pid(STREAM_PID_FILE, proc.pid)
 
 def resolve_track_url(url, title=None, artist=None):
     """Resolves any track item (Spotify URL, query string, or local path) to a playable URL and metadata."""
@@ -877,6 +934,8 @@ def queue_item(url, title=None, artist=None):
     return {"success": True}
 
 def stop_daemon():
+    terminate_tracked_pid(STREAM_PID_FILE)
+    terminate_tracked_pid(SPECTRUM_PID_FILE)
     if os.path.exists(SOCK_PATH):
         send_mpv_cmd(["quit"])
         try:

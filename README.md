@@ -54,11 +54,7 @@ Omaramp requires the following packages for audio playback, PipeWire recording, 
 ### Install Dependencies:
 
 ```bash
-# On Arch Linux / Omarchy
 omarchy pkg add mpv pipewire python-numpy yt-dlp
-
-# Or with pacman:
-sudo pacman -S --needed mpv pipewire python-numpy yt-dlp
 ```
 
 ---
