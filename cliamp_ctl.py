@@ -1011,6 +1011,7 @@ def play_item(url, title=None, artist=None):
     if not real_url:
         return {"success": False, "error": "Unable to resolve track"}
     start_mpv_daemon()
+    start_spectrum_daemon()
     record_history(final_title, final_artist, real_url, 0)
     save_now_playing(final_title, final_artist, real_url)
     if is_youtube_url(real_url):

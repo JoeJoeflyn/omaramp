@@ -76,7 +76,7 @@ Panel {
 
   onOpenedChanged: {
     if (!opened) {
-      runCmd(["stop_spectrum"])
+      stopSpectrum()
       root.visPickerOpen = false
       root.eqPickerOpen = false
       setCenterHoverRevealSuppressed(false)
@@ -90,6 +90,18 @@ Panel {
     loadQueue()
   }
 
+  function startSpectrum() {
+    spectrumProc.running = false
+    spectrumProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "start_spectrum"]
+    spectrumProc.running = true
+  }
+
+  function stopSpectrum() {
+    spectrumProc.running = false
+    spectrumProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "stop_spectrum"]
+    spectrumProc.running = true
+  }
+
   function open() {
     openedFromHotkey = false
     setCenterHoverRevealSuppressed(false)
@@ -99,7 +111,7 @@ Panel {
       loadHistory()
       loadPlaylists()
       loadQueue()
-      runCmd(["start_spectrum"])
+      startSpectrum()
     })
   }
 
@@ -111,7 +123,7 @@ Panel {
       loadHistory()
       loadPlaylists()
       loadQueue()
-      runCmd(["start_spectrum"])
+      startSpectrum()
       if (root.opened) setCenterHoverRevealSuppressed(true)
     })
   }
@@ -121,7 +133,7 @@ Panel {
     root.visPickerOpen = false
     root.eqPickerOpen = false
     root.controller.hide()
-    runCmd(["stop_spectrum"])
+    stopSpectrum()
   }
 
   function toggle() {
@@ -467,6 +479,10 @@ Panel {
     }
   }
 
+  Process {
+    id: spectrumProc
+  }
+
   // Poll timer
   Timer {
     id: pollTimer
@@ -481,9 +497,12 @@ Panel {
   FileView {
     id: specFile
     path: root.spectrumPath
-    watchChanges: true; printErrors: false
-    onFileChanged: root.updateSpectrumData(text())
+    watchChanges: true
+    atomicWrites: true
+    printErrors: false
+    onFileChanged: reload()
     onLoaded: root.updateSpectrumData(text())
+    onLoadFailed: {}
   }
 
   function updateSpectrumData(raw) {

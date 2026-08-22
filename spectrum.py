@@ -36,9 +36,11 @@ def get_monitor_target():
     try:
         res = subprocess.run(["pactl", "get-default-sink"], capture_output=True, text=True, timeout=1.0)
         sink = res.stdout.strip()
-        return sink + ".monitor" if sink else None
+        if sink:
+            return sink + ".monitor"
     except Exception:
-        return None
+        pass
+    return "@DEFAULT_AUDIO_SINK@.monitor"
 
 def start_recorder():
     cmd = ["pw-record", "--raw", "--channels=1", "--format=s16", f"--rate={RATE}"]
