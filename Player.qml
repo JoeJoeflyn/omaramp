@@ -500,8 +500,7 @@ Item {
               if (p.visPickerOpen && root.lyricsVisible) root.lyricsVisible = false
             } else {
               var idx = p.visModes.indexOf(p.visMode)
-              p.visMode = p.visModes[(idx + 1) % p.visModes.length]
-              visCanvas.requestPaint()
+              p.setVisMode(p.visModes[(idx + 1) % p.visModes.length])
             }
           }
         }

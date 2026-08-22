@@ -211,6 +211,12 @@ Panel {
     root.eqText = preset
     runCmd(["set_eq", preset])
   }
+  function setVisMode(mode) {
+    if (!mode) return
+    root.visMode = mode
+    runCmd(["set_vis_mode", mode])
+    if (playerComp) playerComp.requestPaint()
+  }
   function toggleLoudnorm() {
     runCmd(["toggle_loudnorm"])
     var next = !(root.audioFx && root.audioFx.loudnorm)
@@ -390,6 +396,9 @@ Panel {
           root.queueCount = (data.queue_count !== undefined) ? Number(data.queue_count) : 0
           root.eqText = String(data.eq || "Custom")
           if (data.audio_fx) root.audioFx = data.audio_fx
+          if (data.vis_mode && String(data.vis_mode) !== root.visMode && !root.visPickerOpen) {
+            root.visMode = String(data.vis_mode)
+          }
           if (data.resume && root.playbackState === "stopped") {
             root.resumeInfo = data.resume
             root.resumeVisible = true

@@ -200,8 +200,7 @@ BorderSurface {
               anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
               onClicked: {
                 if (p) {
-                  p.visMode = modelData.id
-                  p.requestPaint()
+                  p.setVisMode(modelData.id)
                 }
               }
             }

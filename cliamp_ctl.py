@@ -508,6 +508,27 @@ EQ_PRESETS = {
 
 EQ_FREQS = [31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
 EQ_CACHE_FILE = os.path.join(CACHE_DIR, "eq.json")
+VIS_MODE_FILE = os.path.join(CACHE_DIR, "vis_mode.txt")
+
+def get_vis_mode():
+    if os.path.exists(VIS_MODE_FILE):
+        try:
+            with open(VIS_MODE_FILE, "r", encoding="utf-8") as f:
+                mode = f.read().strip()
+                if mode:
+                    return mode
+        except Exception:
+            pass
+    return "siriwave"
+
+def set_vis_mode(mode):
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(VIS_MODE_FILE, "w", encoding="utf-8") as f:
+            f.write(str(mode).strip())
+        return {"success": True, "vis_mode": mode}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 def get_current_eq():
     if os.path.exists(EQ_CACHE_FILE):
@@ -724,6 +745,7 @@ def get_status():
             "queue_count": len(read_queue()),
             "eq": cur_fx.get("eq", "Flat"),
             "audio_fx": cur_fx,
+            "vis_mode": get_vis_mode(),
             "resume": resume
         }
     except Exception as e:
@@ -746,7 +768,8 @@ def get_status():
             "shuffle": False,
             "repeat": "off",
             "eq": cur_fx.get("eq", "Flat"),
-            "audio_fx": cur_fx
+            "audio_fx": cur_fx,
+            "vis_mode": get_vis_mode()
         }
 
 def resolve_spotify_url(url):
@@ -1207,6 +1230,10 @@ if __name__ == "__main__":
                         break
                 time.sleep(1)
                 send_mpv_cmd(["seek", pos, "absolute"])
-            print(json.dumps({"success": True}))
+    elif action == "set_vis_mode":
+        mode = sys.argv[2] if len(sys.argv) > 2 else "siriwave"
+        print(json.dumps(set_vis_mode(mode)))
+    elif action == "get_vis_mode":
+        print(json.dumps({"vis_mode": get_vis_mode()}))
     else:
         print(json.dumps({"error": f"Unknown action {action}"}))
