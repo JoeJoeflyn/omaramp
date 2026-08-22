@@ -38,6 +38,45 @@ AUDIO_CACHE_DIR = os.path.join(CACHE_DIR, "audio")
 HISTORY_PATH = os.path.expanduser("~/.config/cliamp/history.toml")
 NOW_PLAYING_PATH = os.path.join(CACHE_DIR, "now_playing.json")
 QUEUE_PATH = os.path.join(CACHE_DIR, "queue.json")
+STREAM_CACHE_PATH = os.path.join(CACHE_DIR, "stream_cache.json")
+
+def get_cached_stream_url(url):
+    if not url or not os.path.exists(STREAM_CACHE_PATH):
+        return None
+    try:
+        with open(STREAM_CACHE_PATH, "r", encoding="utf-8") as f:
+            cache = json.load(f)
+        entry = cache.get(url)
+        if entry:
+            if time.time() - entry.get("timestamp", 0) < 14400:
+                return entry.get("direct_url")
+    except Exception:
+        pass
+    return None
+
+def set_cached_stream_url(url, direct_url):
+    if not url or not direct_url:
+        return
+    try:
+        cache = {}
+        if os.path.exists(STREAM_CACHE_PATH):
+            try:
+                with open(STREAM_CACHE_PATH, "r", encoding="utf-8") as f:
+                    cache = json.load(f)
+            except Exception:
+                cache = {}
+        cache[url] = {
+            "direct_url": direct_url,
+            "timestamp": time.time()
+        }
+        if len(cache) > 100:
+            oldest = sorted(cache.keys(), key=lambda k: cache[k].get("timestamp", 0))[:20]
+            for k in oldest:
+                cache.pop(k, None)
+        with open(STREAM_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(cache, f)
+    except Exception:
+        pass
 
 os.makedirs(AUDIO_CACHE_DIR, mode=0o700, exist_ok=True)
 os.makedirs(os.path.expanduser("~/.config/cliamp"), mode=0o700, exist_ok=True)
@@ -296,13 +335,16 @@ def start_mpv_daemon():
             "--no-video",
             "--idle=yes",
             "--ao=pipewire,pulse,alsa",
-            "--ytdl-format=bestaudio/best",
-            "--ytdl-raw-options=extractor-args=youtube:player_client=mweb",
             f"--input-ipc-server={SOCK_PATH}",
             "--title=Omaramp",
             "--script-opts=mpris-identity=Omaramp",
             "--keep-open=yes",
-            "--volume=80"
+            "--volume=80",
+            "--demuxer-lavf-probesize=32768",
+            "--demuxer-lavf-buffersize=32768",
+            "--cache=yes",
+            "--demuxer-max-bytes=10M",
+            "--demuxer-readahead-secs=30"
         ]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         for _ in range(30):
@@ -335,6 +377,13 @@ def parse_history(limit=500):
                 path = str(item.get("path") or "").strip()
                 artist = str(item.get("artist") or "").strip()
                 if title or path:
+                    # If this is a local file path, check if it still exists on disk
+                    if path and not path.startswith(("http://", "https://", "yt:", "spotify:")):
+                        expanded = os.path.expanduser(path)
+                        if os.path.isabs(expanded) and not os.path.exists(expanded):
+                            # File was deleted/moved from disk, prune from recents list
+                            continue
+
                     m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", path)
                     if m:
                         vid_id = m.group(1)
@@ -901,6 +950,13 @@ def search_tracks(query, limit=10):
         except Exception:
             pass
 
+    # Async prefetch direct stream URLs for top results in background so clicks are instantaneous
+    import threading
+    for item in results[:2]:
+        u = item.get("url", "")
+        if is_youtube_url(u) and not get_cached_stream_url(u):
+            threading.Thread(target=resolve_youtube_stream_url, args=(u,), daemon=True).start()
+
     return results
 
 
@@ -1027,17 +1083,26 @@ def save_youtube_meta(url, title, artist):
                 pass
 
 def resolve_youtube_stream_url(url):
-    """Resolve direct HTTPS stream URL for YouTube audio to guarantee 100% reliable 1st-click playback."""
+    """Resolve direct HTTPS stream URL for YouTube audio with 4-hour caching for instantaneous playback."""
+    if not url:
+        return None
+    cached = get_cached_stream_url(url)
+    if cached:
+        return cached
     try:
         r = subprocess.run([
-            "yt-dlp",
+            "yt-dlp", "--no-warnings",
             "--extractor-args", "youtube:player_client=android,web",
             "-f", "18/bestaudio/best",
+            "--no-check-certificates",
+            "--no-playlist",
             "-g", "--", url
-        ], capture_output=True, text=True, timeout=10)
+        ], capture_output=True, text=True, timeout=8)
         lines = [l.strip() for l in r.stdout.splitlines() if l.strip().startswith("http")]
         if lines:
-            return lines[-1]
+            direct_url = lines[-1]
+            set_cached_stream_url(url, direct_url)
+            return direct_url
     except Exception:
         pass
     return None
