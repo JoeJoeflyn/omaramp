@@ -40,15 +40,23 @@ def get_monitor_target():
             return sink + ".monitor"
     except Exception:
         pass
-    return "@DEFAULT_AUDIO_SINK@.monitor"
+    return None
 
 def start_recorder():
-    cmd = ["pw-record", "--raw", "--channels=1", "--format=s16", f"--rate={RATE}"]
     monitor = get_monitor_target()
-    if monitor:
-        cmd += ["--target", monitor]
-    cmd.append("-")
     try:
+        cmd = ["parec", "--format=s16le", f"--rate={RATE}", "--channels=1", "--latency-msec=20"]
+        if monitor:
+            cmd += ["-d", monitor]
+        return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+    try:
+        cmd = ["pw-record", "--raw", "--channels=1", "--format=s16", f"--rate={RATE}"]
+        if monitor:
+            cmd += ["--target", monitor]
+        cmd.append("-")
         return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     except Exception:
         return None
