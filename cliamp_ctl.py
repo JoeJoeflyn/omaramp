@@ -252,10 +252,10 @@ def send_mpv_cmd(cmd_list, timeout=1.0):
         return None
     return None
 
-def is_mpv_running():
+def is_mpv_running(timeout=0.2):
     if not os.path.exists(SOCK_PATH):
         return False
-    res = send_mpv_cmd(["get_property", "idle-active"])
+    res = send_mpv_cmd(["get_property", "idle-active"], timeout=timeout)
     return res is not None and res.get("error") == "success"
 
 def start_spectrum_daemon():
@@ -304,9 +304,9 @@ def start_mpv_daemon():
             "--volume=80"
         ]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-        for _ in range(15):
-            time.sleep(0.1)
-            if os.path.exists(SOCK_PATH):
+        for _ in range(30):
+            time.sleep(0.05)
+            if is_mpv_running(timeout=0.1):
                 break
         apply_audio_fx()
 
@@ -1094,11 +1094,11 @@ if __name__ == "__main__":
             else:
                 np = read_now_playing()
                 if np.get("url"):
-                    play_track(np.get("url"), np.get("title"), np.get("artist"))
+                    play_item(np.get("url"), np.get("title"), np.get("artist"))
                 else:
                     hist = parse_history(1)
                     if hist and hist[0].get("path"):
-                        play_track(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))
+                        play_item(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))
         else:
             send_mpv_cmd(["set_property", "pause", False])
         print(json.dumps({"success": True}))
@@ -1115,11 +1115,11 @@ if __name__ == "__main__":
             else:
                 np = read_now_playing()
                 if np.get("url"):
-                    play_track(np.get("url"), np.get("title"), np.get("artist"))
+                    play_item(np.get("url"), np.get("title"), np.get("artist"))
                 else:
                     hist = parse_history(1)
                     if hist and hist[0].get("path"):
-                        play_track(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))
+                        play_item(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))
         else:
             send_mpv_cmd(["cycle", "pause"])
         print(json.dumps({"success": True}))
