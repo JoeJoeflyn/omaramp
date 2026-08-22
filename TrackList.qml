@@ -271,7 +271,7 @@ Column {
               Image {
                 visible: modelData.thumb !== undefined && modelData.thumb !== ""
                 anchors.fill: parent
-                source: modelData.thumb ? "file://" + modelData.thumb : ""
+                source: (modelData.thumb && (modelData.thumb.indexOf("http://") === 0 || modelData.thumb.indexOf("https://") === 0 || modelData.thumb.indexOf("file://") === 0)) ? modelData.thumb : (modelData.thumb ? "file://" + modelData.thumb : "")
                 fillMode: Image.PreserveAspectCrop; sourceSize.width: 48; sourceSize.height: 48
               }
               Text {
@@ -372,7 +372,7 @@ Column {
               Image {
                 visible: modelData.thumb !== undefined && modelData.thumb !== ""
                 anchors.fill: parent
-                source: modelData.thumb ? "file://" + modelData.thumb : ""
+                source: (modelData.thumb && (modelData.thumb.indexOf("http://") === 0 || modelData.thumb.indexOf("https://") === 0 || modelData.thumb.indexOf("file://") === 0)) ? modelData.thumb : (modelData.thumb ? "file://" + modelData.thumb : "")
                 fillMode: Image.PreserveAspectCrop; sourceSize.width: 48; sourceSize.height: 48
               }
               Text {
@@ -537,7 +537,7 @@ Column {
                 Image {
                   visible: modelData.thumb !== undefined && modelData.thumb !== ""
                   anchors.fill: parent
-                  source: modelData.thumb ? "file://" + modelData.thumb : ""
+                  source: (modelData.thumb && (modelData.thumb.indexOf("http://") === 0 || modelData.thumb.indexOf("https://") === 0 || modelData.thumb.indexOf("file://") === 0)) ? modelData.thumb : (modelData.thumb ? "file://" + modelData.thumb : "")
                   fillMode: Image.PreserveAspectCrop; sourceSize.width: 48; sourceSize.height: 48
                 }
                 Text {

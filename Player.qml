@@ -78,7 +78,7 @@ Item {
 
   function toggleLyrics() {
     lyricsVisible = !lyricsVisible
-    if (lyricsVisible && lyricsTrack !== p.currentTrack) {
+    if (lyricsVisible && (lyricsLines.length === 0 || lyricsTrack !== p.currentTrack)) {
       fetchLyrics()
     }
   }
@@ -99,13 +99,15 @@ Item {
     }
     var lines = []
     var rawLines = raw.split("\n")
-    var timeRe = /\[(\d{1,2}):(\d{1,2}(?:\.\d+)?)\]/g
+    var timeRe = /\[(\d{1,3}):(\d{1,2}(?:\.\d+)?)\]/g
     for (var i = 0; i < rawLines.length; i++) {
       var l = rawLines[i].trim()
       if (!l) continue
+      if (/^\[(ar|ti|al|by|offset|length|re|ve):/i.test(l)) continue
       var match
       var times = []
       var textStart = 0
+      timeRe.lastIndex = 0
       while ((match = timeRe.exec(l)) !== null) {
         var min = parseInt(match[1])
         var sec = parseFloat(match[2])
@@ -117,7 +119,7 @@ Item {
         for (var t = 0; t < times.length; t++) {
           lines.push({ time: times[t], text: lineText })
         }
-      } else if (lineText) {
+      } else if (lineText && !/^\[.*?\]$/.test(lineText)) {
         lines.push({ time: -1, text: lineText })
       }
     }
@@ -130,9 +132,9 @@ Item {
     if (!lyricsVisible || !lyricsLines || !lyricsLines.length) return
     var idx = -1
     for (var i = 0; i < lyricsLines.length; i++) {
-      if (lyricsLines[i].time >= 0 && lyricsLines[i].time <= (sec + 0.15)) {
+      if (lyricsLines[i].time >= 0 && lyricsLines[i].time <= (sec + 0.10)) {
         idx = i
-      } else if (lyricsLines[i].time > (sec + 0.15)) {
+      } else if (lyricsLines[i].time > (sec + 0.10)) {
         break
       }
     }
@@ -290,7 +292,7 @@ Item {
           Image {
             anchors.fill: parent; anchors.margins: 1
             visible: p.artPath !== ""
-            source: p.artPath !== "" ? "file://" + p.artPath : ""
+            source: (p.artPath && (p.artPath.indexOf("http://") === 0 || p.artPath.indexOf("https://") === 0 || p.artPath.indexOf("file://") === 0)) ? p.artPath : (p.artPath ? "file://" + p.artPath : "")
             fillMode: Image.PreserveAspectCrop
             sourceSize.width: 72; sourceSize.height: 72
           }

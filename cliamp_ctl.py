@@ -261,6 +261,15 @@ def play_next_in_queue():
 
 def save_now_playing(title, artist, url="", pos=0):
     try:
+        cur = read_now_playing()
+        if title and ("&rqh=" in title or "videoplayback?" in title or title.startswith("mp4&")):
+            title = cur.get("title", "")
+        if not title:
+            title = cur.get("title", "")
+        if not artist:
+            artist = cur.get("artist", "")
+        if not url:
+            url = cur.get("url", "")
         with open(NOW_PLAYING_PATH, "w", encoding="utf-8") as f:
             json.dump({"title": title or "", "artist": artist or "", "url": url or "", "pos": pos}, f)
     except Exception:
@@ -726,43 +735,49 @@ def get_status():
         tot_s = float(dur_res.get("data") or 0) if (dur_res and dur_res.get("data") is not None) else 0.0
         prog = (cur_s / tot_s) if tot_s > 0 else 0.0
 
+        np = read_now_playing()
         raw_title = str(title_res.get("data") or "") if title_res else ""
-        artist = ""
-        track = raw_title or "Omaramp"
-        art_path = ""
-        # When streaming via FIFO, mpv shows the filename — use saved now-playing metadata
-        if raw_title in ("omaramp_stream", STREAM_FIFO, os.path.basename(STREAM_FIFO)):
-            np = read_now_playing()
-            if np.get("title"):
-                track = np["title"]
-                artist = np.get("artist", "")
-                # Look up thumbnail from now-playing URL
-                np_url = np.get("url", "")
-                if np_url:
-                    m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", np_url)
-                    if m:
-                        thumb_f = os.path.join(AUDIO_CACHE_DIR, f"{m.group(1)}.jpg")
-                        if os.path.exists(thumb_f):
-                            art_path = thumb_f
-        vid_match = re.match(r"^(?:play_)?([0-9A-Za-z_-]{11})\.(?:mp3|mp4|m4a|webm)$", raw_title)
-        if vid_match:
-            vid_id = vid_match.group(1)
-            meta_f = os.path.join(AUDIO_CACHE_DIR, f"{vid_id}.json")
-            if os.path.exists(meta_f):
-                try:
-                    with open(meta_f, "r", encoding="utf-8") as f:
-                        meta = json.load(f)
-                        track = meta.get("title", track)
-                        artist = meta.get("artist", "")
-                except Exception:
-                    pass
-            thumb_f = os.path.join(AUDIO_CACHE_DIR, f"{vid_id}.jpg")
-            if os.path.exists(thumb_f):
-                art_path = thumb_f
+        if raw_title and ("&rqh=" in raw_title or "videoplayback?" in raw_title or raw_title.startswith("mp4&")):
+            raw_title = ""
+        
+        # Extract title and artist with highest fidelity from now_playing or mpv media-title
+        if np.get("title") and not ("&rqh=" in np["title"] or np["title"].startswith("mp4&")):
+            track = np["title"]
+            artist = np.get("artist", "")
         elif " - " in raw_title:
             p = raw_title.split(" - ", 1)
             artist = p[0].strip()
             track = p[1].strip()
+        else:
+            track = raw_title or np.get("title") or "Omaramp"
+            artist = np.get("artist", "")
+
+        # Extract album art / thumbnail
+        art_path = ""
+        np_url = np.get("url", "")
+        if np_url:
+            m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", np_url)
+            if m:
+                vid_id = m.group(1)
+                thumb_f = os.path.join(AUDIO_CACHE_DIR, f"{vid_id}.jpg")
+                if os.path.exists(thumb_f):
+                    art_path = thumb_f
+                else:
+                    art_path = f"https://img.youtube.com/vi/{vid_id}/mqdefault.jpg"
+                    import threading
+                    def _dl_th(v, p):
+                        try:
+                            urllib.request.urlretrieve(f"https://img.youtube.com/vi/{v}/mqdefault.jpg", p)
+                        except Exception:
+                            pass
+                    threading.Thread(target=_dl_th, args=(vid_id, thumb_f), daemon=True).start()
+            elif os.path.isabs(os.path.expanduser(np_url)) and os.path.exists(os.path.expanduser(np_url)):
+                folder = os.path.dirname(os.path.expanduser(np_url))
+                for cover_name in ("cover.jpg", "cover.png", "folder.jpg", "folder.png", "album.jpg", "art.jpg"):
+                    c_path = os.path.join(folder, cover_name)
+                    if os.path.exists(c_path):
+                        art_path = c_path
+                        break
 
         vol_data = vol_res.get("data") if vol_res else None
         vol = int(vol_data) if vol_data is not None else 80
@@ -835,6 +850,61 @@ def resolve_spotify_url(url):
     except Exception:
         pass
     return None
+
+def search_youtube_innertube(query, limit=10):
+    """Ultra-fast direct YouTube InnerTube search API bypassing yt-dlp child process overhead."""
+    if not query:
+        return []
+    url = "https://www.youtube.com/youtubei/v1/search"
+    payload = {
+        "context": {
+            "client": {
+                "clientName": "WEB",
+                "clientVersion": "2.20240101.01.00",
+                "hl": "en",
+                "gl": "US"
+            }
+        },
+        "query": query
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        }
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=3.5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        results = []
+        sections = data.get("contents", {}).get("twoColumnSearchResultsRenderer", {}).get("primaryContents", {}).get("sectionListRenderer", {}).get("contents", [])
+        for s in sections:
+            items = s.get("itemSectionRenderer", {}).get("contents", [])
+            for it in items:
+                v = it.get("videoRenderer")
+                if v:
+                    vid = v.get("videoId")
+                    if not vid: continue
+                    title = v.get("title", {}).get("runs", [{}])[0].get("text", "")
+                    artist = v.get("ownerText", {}).get("runs", [{}])[0].get("text", "")
+                    dur = v.get("lengthText", {}).get("simpleText", "")
+                    thumbs = v.get("thumbnail", {}).get("thumbnails", [])
+                    thumb_url = thumbs[-1].get("url", "") if thumbs else f"https://img.youtube.com/vi/{vid}/mqdefault.jpg"
+                    results.append({
+                        "id": vid,
+                        "url": f"https://www.youtube.com/watch?v={vid}",
+                        "title": title,
+                        "artist": artist,
+                        "duration": dur,
+                        "thumb": thumb_url
+                    })
+                    if len(results) >= limit: break
+            if len(results) >= limit: break
+        return results
+    except Exception:
+        return []
 
 def search_tracks(query, limit=10):
     if not query or not query.strip():
@@ -913,42 +983,38 @@ def search_tracks(query, limit=10):
         if spot and spot.get("query"):
             q = spot["query"]
 
-    # 3. YouTube online search
+    # 3. Fast YouTube online search (InnerTube API -> yt-dlp fallback)
     remaining = limit - len(results)
     if remaining > 0:
-        cmd = [
-            "yt-dlp",
-            "--flat-playlist",
-            "--print", "%(id)s\t%(title)s\t%(uploader)s\t%(duration_string)s",
-            "--",
-            f"ytsearch{remaining}:{q}"
-        ]
-        try:
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=8.0)
-            for line in (res.stdout or "").splitlines():
-                parts = line.split("\t")
-                if len(parts) >= 2:
-                    vid = parts[0].strip()
-                    title = parts[1].strip()
-                    uploader = parts[2].strip() if len(parts) > 2 else ""
-                    dur = parts[3].strip() if len(parts) > 3 else ""
-                    results.append({
-                        "id": vid,
-                        "url": f"https://www.youtube.com/watch?v={vid}",
-                        "title": title,
-                        "artist": uploader,
-                        "duration": dur,
-                        "thumb": os.path.join(AUDIO_CACHE_DIR, f"{vid}.jpg")
-                    })
-                    # Prefetch thumbnail in background so it's ready when shown
-                    thumb_f = os.path.join(AUDIO_CACHE_DIR, f"{vid}.jpg")
-                    if not os.path.exists(thumb_f):
-                        try:
-                            urllib.request.urlretrieve(f"https://img.youtube.com/vi/{vid}/mqdefault.jpg", thumb_f)
-                        except Exception:
-                            pass
-        except Exception:
-            pass
+        yt_results = search_youtube_innertube(q, remaining)
+        if not yt_results:
+            cmd = [
+                "yt-dlp",
+                "--flat-playlist",
+                "--print", "%(id)s\t%(title)s\t%(uploader)s\t%(duration_string)s",
+                "--",
+                f"ytsearch{remaining}:{q}"
+            ]
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=6.0)
+                for line in (res.stdout or "").splitlines():
+                    parts = line.split("\t")
+                    if len(parts) >= 2:
+                        vid = parts[0].strip()
+                        title = parts[1].strip()
+                        uploader = parts[2].strip() if len(parts) > 2 else ""
+                        dur = parts[3].strip() if len(parts) > 3 else ""
+                        yt_results.append({
+                            "id": vid,
+                            "url": f"https://www.youtube.com/watch?v={vid}",
+                            "title": title,
+                            "artist": uploader,
+                            "duration": dur,
+                            "thumb": os.path.join(AUDIO_CACHE_DIR, f"{vid}.jpg")
+                        })
+            except Exception:
+                pass
+        results.extend(yt_results)
 
     # Async prefetch direct stream URLs for top results in background so clicks are instantaneous
     import threading
@@ -982,27 +1048,33 @@ def is_safe_url(url):
         return os.path.isfile(expanded)
     return False
 
+LYRICS_DIR = os.path.join(CACHE_DIR, "lyrics")
+os.makedirs(LYRICS_DIR, mode=0o700, exist_ok=True)
+
 LYRICS_CACHE = {}
 def fetch_lyrics(title, artist, url=""):
-    key = (title or "").strip().lower() + "|" + (artist or "").strip().lower()
+    raw_t = (title or "").strip()
+    raw_a = (artist or "").strip()
+    if not raw_t or raw_t in ("Omaramp", "omaramp_stream", "No track loaded"):
+        return {"synced": "", "plain": "", "source": ""}
+
+    key = raw_t.lower() + "|" + raw_a.lower()
     if key in LYRICS_CACHE:
         return LYRICS_CACHE[key]
+
+    import hashlib
+    h = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+    disk_cache = os.path.join(LYRICS_DIR, f"{h}.json")
+    if os.path.exists(disk_cache):
+        try:
+            with open(disk_cache, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                LYRICS_CACHE[key] = data
+                return data
+        except Exception:
+            pass
+
     try:
-        raw_t = (title or "").strip()
-        raw_a = (artist or "").strip()
-
-        # If title is generic and we have a YouTube URL, fetch actual video title
-        if (not raw_t or raw_t in ("Omaramp", "omaramp_stream") or " - " not in raw_t) and is_youtube_url(url or ""):
-            try:
-                vid = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", url).group(1)
-                r = subprocess.run(["yt-dlp", "--no-warnings", "--print", "%(title)s", "--", f"https://www.youtube.com/watch?v={vid}"],
-                                   capture_output=True, text=True, timeout=5)
-                full_title = r.stdout.strip()
-                if full_title:
-                    raw_t = full_title
-            except Exception:
-                pass
-
         # Strip video/audio metadata tags
         clean_t = re.sub(r"(?i)\s*[\(\[](?:official|music|video|audio|lyrics?|4k|hd|remaster(?:ed)?|lyric video|visualizer|hq|clip|explicit).*?[\)\]]", "", raw_t)
         clean_t = re.sub(r"\s*[\(\[].*?[\)\]]", "", clean_t).strip()
@@ -1014,49 +1086,46 @@ def fetch_lyrics(title, artist, url=""):
             clean_t = parts[1].strip()
 
         data = []
-        # Strategy 1: Search with specific artist and track
-        if clean_a and clean_t:
-            try:
-                u = f"https://lrclib.net/api/search?artist_name={urllib.parse.quote(clean_a)}&track_name={urllib.parse.quote(clean_t)}"
-                req = urllib.request.Request(u, headers={"User-Agent": "Omaramp/1.0 (Linux)"})
-                res = urllib.request.urlopen(req, timeout=5)
-                data = json.loads(res.read().decode("utf-8"))
-            except Exception:
-                pass
+        # Strategy 1: Combined search query (fastest & highest hit rate on LRCLIB)
+        search_query = f"{clean_t} {clean_a}".strip() if clean_a else clean_t
+        try:
+            u = f"https://lrclib.net/api/search?q={urllib.parse.quote(search_query)}"
+            req = urllib.request.Request(u, headers={"User-Agent": "Omaramp/1.0 (Linux)"})
+            with urllib.request.urlopen(req, timeout=2.5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            pass
 
-        # Strategy 2: Query search with both artist + title
-        if not data and (clean_t or clean_a):
+        # Strategy 2: Structured get if search returned nothing
+        if not data and clean_a and clean_t:
             try:
-                q_str = f"{clean_t} {clean_a}".strip()
-                u = f"https://lrclib.net/api/search?q={urllib.parse.quote(q_str)}"
+                u = f"https://lrclib.net/api/get?artist_name={urllib.parse.quote(clean_a)}&track_name={urllib.parse.quote(clean_t)}"
                 req = urllib.request.Request(u, headers={"User-Agent": "Omaramp/1.0 (Linux)"})
-                res = urllib.request.urlopen(req, timeout=5)
-                data = json.loads(res.read().decode("utf-8"))
-            except Exception:
-                pass
-
-        # Strategy 3: Fallback query with original raw title
-        if not data and raw_t and raw_t != clean_t:
-            try:
-                u = f"https://lrclib.net/api/search?q={urllib.parse.quote(raw_t)}"
-                req = urllib.request.Request(u, headers={"User-Agent": "Omaramp/1.0 (Linux)"})
-                res = urllib.request.urlopen(req, timeout=5)
-                data = json.loads(res.read().decode("utf-8"))
+                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                    item = json.loads(resp.read().decode("utf-8"))
+                    if item:
+                        data = [item]
             except Exception:
                 pass
 
         result = {"synced": "", "plain": "", "source": ""}
-        for e in data:
-            if e.get("syncedLyrics"):
-                result = {"synced": e["syncedLyrics"], "plain": e.get("plainLyrics", ""), "source": "lrclib"}
-                break
-        if not result["synced"]:
+        if isinstance(data, list):
             for e in data:
-                if e.get("plainLyrics"):
-                    result = {"synced": "", "plain": e["plainLyrics"], "source": "lrclib"}
+                if e.get("syncedLyrics"):
+                    result = {"synced": e["syncedLyrics"], "plain": e.get("plainLyrics", ""), "source": "lrclib"}
                     break
+            if not result["synced"]:
+                for e in data:
+                    if e.get("plainLyrics"):
+                        result = {"synced": "", "plain": e["plainLyrics"], "source": "lrclib"}
+                        break
 
         LYRICS_CACHE[key] = result
+        try:
+            with open(disk_cache, "w", encoding="utf-8") as f:
+                json.dump(result, f)
+        except Exception:
+            pass
         return result
     except Exception:
         return {"synced": "", "plain": "", "source": ""}
@@ -1197,6 +1266,10 @@ def play_item(url, title=None, artist=None):
             stream_target = STREAM_FIFO
 
     send_mpv_cmd(["loadfile", stream_target, "replace"])
+    if final_title:
+        send_mpv_cmd(["set_property", "force-media-title", final_title])
+        import threading
+        threading.Thread(target=fetch_lyrics, args=(final_title, final_artist, real_url), daemon=True).start()
     send_mpv_cmd(["set_property", "pause", False])
     return {"success": True}
 
@@ -1268,23 +1341,29 @@ if __name__ == "__main__":
         q = " ".join(sys.argv[2:]) if len(sys.argv) > 2 else ""
         print(json.dumps(search_tracks(q, 10)))
     elif action == "play":
-        start_mpv_daemon()
-        idle_res = send_mpv_cmd(["get_property", "idle-active"])
-        if idle_res and idle_res.get("data") is True:
-            q = read_queue()
-            if q:
-                play_next_in_queue()
-            else:
-                np = read_now_playing()
-                if np.get("url"):
-                    play_item(np.get("url"), np.get("title"), np.get("artist"))
-                else:
-                    hist = parse_history(1)
-                    if hist and hist[0].get("path"):
-                        play_item(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))
+        if len(sys.argv) > 2 and sys.argv[2].strip():
+            url = sys.argv[2]
+            t = sys.argv[3] if len(sys.argv) > 3 else ""
+            a = sys.argv[4] if len(sys.argv) > 4 else ""
+            print(json.dumps(play_item(url, t, a)))
         else:
-            send_mpv_cmd(["set_property", "pause", False])
-        print(json.dumps({"success": True}))
+            start_mpv_daemon()
+            idle_res = send_mpv_cmd(["get_property", "idle-active"])
+            if idle_res and idle_res.get("data") is True:
+                q = read_queue()
+                if q:
+                    play_next_in_queue()
+                else:
+                    np = read_now_playing()
+                    if np.get("url"):
+                        play_item(np.get("url"), np.get("title"), np.get("artist"))
+                    else:
+                        hist = parse_history(1)
+                        if hist and hist[0].get("path"):
+                            play_item(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))
+            else:
+                send_mpv_cmd(["set_property", "pause", False])
+            print(json.dumps({"success": True}))
     elif action == "pause":
         send_mpv_cmd(["set_property", "pause", True])
         print(json.dumps({"success": True}))

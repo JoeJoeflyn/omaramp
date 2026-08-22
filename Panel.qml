@@ -35,14 +35,15 @@ Panel {
   Behavior on dynamicAccent { ColorAnimation { duration: 500; easing.type: Easing.InOutQuad } }
   property string timeCurrent: "00:00"
   property string timeTotal: "00:00"
-  property int curSecs: 0
-  property int totalSecs: 0
+  property real curSecs: 0.0
+  property real totalSecs: 0.0
   property real progress: 0.0
   property real playbackSpeed: 1.0
   property int volumePct: 80
   property real volumeDb: 0.0
   property bool shuffleMode: false
   property string repeatMode: "off"
+  property real _lastStatusTime: 0
   property string eqText: "Custom"
   property var audioFx: ({ "eq": "Flat", "loudnorm": false, "spatial": false })
   property int _preMuteVol: 80
@@ -385,6 +386,7 @@ Panel {
           root.timeCurrent = String(data.time_current || "00:00")
           root.timeTotal = String(data.time_total || "00:00")
           root.curSecs = Number(data.cur_secs || 0)
+          root._lastStatusTime = Date.now()
           if (playerComp.lyricsVisible) playerComp.updateLyricsPosition(root.curSecs)
           root.totalSecs = Number(data.total_secs || 0)
           root.progress = Number(data.progress || 0.0)
@@ -495,7 +497,7 @@ Panel {
   // Poll timer
   Timer {
     id: pollTimer
-    interval: root.opened ? 1000 : ((root.settings && root.settings.pollIntervalSec ? root.settings.pollIntervalSec : 2) * 1000)
+    interval: root.opened ? 500 : ((root.settings && root.settings.pollIntervalSec ? root.settings.pollIntervalSec : 2) * 1000)
     running: true; repeat: true; triggeredOnStart: true
     onTriggered: root.refresh()
   }
@@ -556,8 +558,15 @@ Panel {
     id: visTimer
     interval: 35; running: root.opened; repeat: true
     onTriggered: {
-      if (root.isPlaying) specFile.reload()
-      else root.updateSpectrumData("")
+      if (root.isPlaying) {
+        specFile.reload()
+        if (playerComp && playerComp.lyricsVisible && root._lastStatusTime > 0) {
+          var elapsed = (Date.now() - root._lastStatusTime) / 1000.0
+          playerComp.updateLyricsPosition(root.curSecs + elapsed * root.playbackSpeed)
+        }
+      } else {
+        root.updateSpectrumData("")
+      }
     }
   }
 
@@ -708,29 +717,47 @@ Panel {
             color: Qt.rgba(0.05, 0.05, 0.07, 0.85)
             borderSpec: Border.controlSpec("normal", root.foreground, Color.accent)
 
-            Row {
+            Item {
               id: lyricsHeader
               anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
               anchors.margins: Style.space(8)
-              spacing: Style.space(6)
+              implicitHeight: Style.space(20)
 
-              Text {
+              Row {
+                anchors.left: parent.left
+                anchors.right: closeLyricsBtn.left
+                anchors.rightMargin: Style.space(8)
                 anchors.verticalCenter: parent.verticalCenter
-                text: "\uf10d"
-                color: Color.accent; font.family: root.fontFamily; font.pixelSize: Style.font.caption
+                spacing: Style.space(6)
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "\uf10d"
+                  color: Color.accent; font.family: root.fontFamily; font.pixelSize: Style.font.caption
+                }
+                Text {
+                  width: parent.width - Style.space(24)
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: "Lyrics — " + (root.currentTrack || "No track")
+                  color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.font.caption
+                  font.bold: true; elide: Text.ElideRight
+                }
               }
-              Text {
-                width: parent.width - Style.space(40); anchors.verticalCenter: parent.verticalCenter
-                textFormat: Text.PlainText
-                text: "Lyrics — " + (root.currentTrack || "No track")
-                color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.font.caption
-                font.bold: true; elide: Text.ElideRight
-              }
-              Text {
+
+              // Close icon pushed to top far right
+              Item {
+                id: closeLyricsBtn
+                anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                text: "\uf00d"
-                color: closeLyricsMouse.containsMouse ? Color.accent : root.dim
-                font.family: root.fontFamily; font.pixelSize: Style.font.caption
+                width: Style.space(20); height: Style.space(20)
+
+                Text {
+                  anchors.centerIn: parent
+                  text: "\uf00d"
+                  color: closeLyricsMouse.containsMouse ? Color.accent : root.dim
+                  font.family: root.fontFamily; font.pixelSize: Style.font.caption
+                }
                 MouseArea {
                   id: closeLyricsMouse
                   anchors.fill: parent; cursorShape: Qt.PointingHandCursor; hoverEnabled: true
