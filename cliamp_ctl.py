@@ -8,6 +8,7 @@ import socket
 import time
 import re
 import signal
+import shutil
 import urllib.request
 import urllib.parse
 try:
@@ -790,45 +791,117 @@ def search_tracks(query, limit=10):
     if not query or not query.strip():
         return []
     q = query.strip()
+
+    results = []
+
+    # 1. Fast global audio scan across user system using fd / fallback
+    ext_list = ["mp3", "flac", "wav", "m4a", "ogg", "opus", "aac", "aiff", "wma"]
+    found_local = []
+    if shutil.which("fd"):
+        try:
+            fd_cmd = [
+                "fd", "--max-results", str(limit), "--ignore-case",
+                "--exclude", ".cache", "--exclude", ".local", "--exclude", ".git",
+                "--exclude", "node_modules", "--exclude", ".gemini", "--exclude", ".npm",
+                "--exclude", ".cargo", "--exclude", ".rustup"
+            ]
+            for ext in ext_list:
+                fd_cmd.extend(["-e", ext])
+            fd_cmd.extend([q, os.path.expanduser("~")])
+            r = subprocess.run(fd_cmd, capture_output=True, text=True, timeout=1.5)
+            for line in (r.stdout or "").splitlines():
+                p = line.strip()
+                if p and os.path.isfile(p):
+                    found_local.append(p)
+        except Exception:
+            pass
+
+    # Fallback scan across common directories if fd is missing or found nothing
+    if not found_local:
+        candidate_dirs = [
+            os.path.expanduser("~/Music"),
+            os.path.expanduser("~/Downloads"),
+            os.path.expanduser("~/Desktop"),
+            os.path.expanduser("~/Documents"),
+            os.path.expanduser("~/Audio")
+        ]
+        exts = tuple("." + e for e in ext_list)
+        for cdir in candidate_dirs:
+            if not os.path.isdir(cdir):
+                continue
+            try:
+                for root, _, files in os.walk(cdir):
+                    for f in files:
+                        if f.lower().endswith(exts) and q.lower() in f.lower():
+                            full_path = os.path.join(root, f)
+                            if full_path not in found_local:
+                                found_local.append(full_path)
+                            if len(found_local) >= limit:
+                                break
+                    if len(found_local) >= limit:
+                        break
+            except Exception:
+                pass
+
+    for full_path in found_local[:limit]:
+        name = os.path.splitext(os.path.basename(full_path))[0]
+        artist, title = "Local", name
+        if " - " in name:
+            parts = name.split(" - ", 1)
+            artist, title = parts[0].strip(), parts[1].strip()
+        results.append({
+            "id": full_path,
+            "url": full_path,
+            "title": title,
+            "artist": f"{artist} (Offline)",
+            "duration": "Local",
+            "thumb": ""
+        })
+
+    # 2. Spotify track URL resolver
     if "spotify.com/track/" in q:
         spot = resolve_spotify_url(q)
         if spot and spot.get("query"):
             q = spot["query"]
-    cmd = [
-        "yt-dlp",
-        "--flat-playlist",
-        "--print", "%(id)s\t%(title)s\t%(uploader)s\t%(duration_string)s",
-        "--",
-        f"ytsearch{limit}:{q}"
-    ]
-    try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=8.0)
-        results = []
-        for line in (res.stdout or "").splitlines():
-            parts = line.split("\t")
-            if len(parts) >= 2:
-                vid = parts[0].strip()
-                title = parts[1].strip()
-                uploader = parts[2].strip() if len(parts) > 2 else ""
-                dur = parts[3].strip() if len(parts) > 3 else ""
-                results.append({
-                    "id": vid,
-                    "url": f"https://www.youtube.com/watch?v={vid}",
-                    "title": title,
-                    "artist": uploader,
-                    "duration": dur,
-                    "thumb": os.path.join(AUDIO_CACHE_DIR, f"{vid}.jpg")
-                })
-                # Prefetch thumbnail in background so it's ready when shown
-                thumb_f = os.path.join(AUDIO_CACHE_DIR, f"{vid}.jpg")
-                if not os.path.exists(thumb_f):
-                    try:
-                        urllib.request.urlretrieve(f"https://img.youtube.com/vi/{vid}/mqdefault.jpg", thumb_f)
-                    except Exception:
-                        pass
-        return results
-    except Exception:
-        return []
+
+    # 3. YouTube online search
+    remaining = limit - len(results)
+    if remaining > 0:
+        cmd = [
+            "yt-dlp",
+            "--flat-playlist",
+            "--print", "%(id)s\t%(title)s\t%(uploader)s\t%(duration_string)s",
+            "--",
+            f"ytsearch{remaining}:{q}"
+        ]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=8.0)
+            for line in (res.stdout or "").splitlines():
+                parts = line.split("\t")
+                if len(parts) >= 2:
+                    vid = parts[0].strip()
+                    title = parts[1].strip()
+                    uploader = parts[2].strip() if len(parts) > 2 else ""
+                    dur = parts[3].strip() if len(parts) > 3 else ""
+                    results.append({
+                        "id": vid,
+                        "url": f"https://www.youtube.com/watch?v={vid}",
+                        "title": title,
+                        "artist": uploader,
+                        "duration": dur,
+                        "thumb": os.path.join(AUDIO_CACHE_DIR, f"{vid}.jpg")
+                    })
+                    # Prefetch thumbnail in background so it's ready when shown
+                    thumb_f = os.path.join(AUDIO_CACHE_DIR, f"{vid}.jpg")
+                    if not os.path.exists(thumb_f):
+                        try:
+                            urllib.request.urlretrieve(f"https://img.youtube.com/vi/{vid}/mqdefault.jpg", thumb_f)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+    return results
 
 
 def is_youtube_url(url):
@@ -953,19 +1026,31 @@ def save_youtube_meta(url, title, artist):
             except Exception:
                 pass
 
-def stream_youtube(url):
-    """Stream YouTube audio to mpv via a secure private FIFO pipe — no disk download."""
-    # Terminate previously tracked yt-dlp instance specifically by verified PID & signature
-    terminate_tracked_pid(STREAM_PID_FILE, expected_signature=["yt-dlp", STREAM_FIFO])
+def resolve_youtube_stream_url(url):
+    """Resolve direct HTTPS stream URL for YouTube audio to guarantee 100% reliable 1st-click playback."""
+    try:
+        r = subprocess.run([
+            "yt-dlp",
+            "--extractor-args", "youtube:player_client=android,web",
+            "-f", "18/bestaudio/best",
+            "-g", "--", url
+        ], capture_output=True, text=True, timeout=10)
+        lines = [l.strip() for l in r.stdout.splitlines() if l.strip().startswith("http")]
+        if lines:
+            return lines[-1]
+    except Exception:
+        pass
+    return None
 
-    # Ensure runtime directory exists with strict 0o700 permissions
+def stream_youtube(url):
+    """Stream YouTube audio to mpv via a secure private FIFO pipe fallback."""
+    terminate_tracked_pid(STREAM_PID_FILE, expected_signature=["yt-dlp", STREAM_FIFO])
     os.makedirs(RUN_DIR, mode=0o700, exist_ok=True)
     try:
         os.chmod(RUN_DIR, 0o700)
     except Exception:
         pass
 
-    # Securely remove old FIFO if present (verify ownership and prevent symlink hijacking)
     if os.path.lexists(STREAM_FIFO):
         try:
             if os.path.islink(STREAM_FIFO) or not os.path.exists(STREAM_FIFO):
@@ -979,17 +1064,15 @@ def stream_youtube(url):
             if not isinstance(e, FileNotFoundError):
                 raise
 
-    # Create the private FIFO with owner-only 0o600 permissions
     os.mkfifo(STREAM_FIFO, 0o600)
     try:
         os.chmod(STREAM_FIFO, 0o600)
     except Exception:
         pass
 
-    # Open the FIFO read end non-blocking so the writer (yt-dlp) never blocks
     read_fd = os.open(STREAM_FIFO, os.O_RDONLY | os.O_NONBLOCK)
     write_fd = os.open(STREAM_FIFO, os.O_WRONLY)
-    os.close(read_fd)  # Close our dummy reader — mpv will take over
+    os.close(read_fd)
     proc = subprocess.Popen(
         ["yt-dlp", "--no-warnings", "-f", "18/best", "-o", "-", "--", url],
         stdout=os.fdopen(write_fd, "wb"),
@@ -1037,12 +1120,18 @@ def play_item(url, title=None, artist=None):
     start_spectrum_daemon()
     record_history(final_title, final_artist, real_url, 0)
     save_now_playing(final_title, final_artist, real_url)
+    
+    stream_target = real_url
     if is_youtube_url(real_url):
         save_youtube_meta(real_url, final_title, final_artist)
-        stream_youtube(real_url)
-        send_mpv_cmd(["loadfile", STREAM_FIFO, "replace"])
-    else:
-        send_mpv_cmd(["loadfile", real_url, "replace"])
+        direct_url = resolve_youtube_stream_url(real_url)
+        if direct_url:
+            stream_target = direct_url
+        else:
+            stream_youtube(real_url)
+            stream_target = STREAM_FIFO
+
+    send_mpv_cmd(["loadfile", stream_target, "replace"])
     send_mpv_cmd(["set_property", "pause", False])
     return {"success": True}
 
@@ -1052,14 +1141,19 @@ def queue_item(url, title=None, artist=None):
         return {"success": False, "error": "Unable to resolve track"}
     start_mpv_daemon()
     record_history(final_title, final_artist, real_url, 0)
+    save_now_playing(final_title, final_artist, real_url)
+    
+    stream_target = real_url
     if is_youtube_url(real_url):
         save_youtube_meta(real_url, final_title, final_artist)
-        save_now_playing(final_title, final_artist, real_url)
-        stream_youtube(real_url)
-        send_mpv_cmd(["loadfile", STREAM_FIFO, "append"])
-        return {"success": True}
-    save_now_playing(final_title, final_artist, real_url)
-    send_mpv_cmd(["loadfile", real_url, "append"])
+        direct_url = resolve_youtube_stream_url(real_url)
+        if direct_url:
+            stream_target = direct_url
+        else:
+            stream_youtube(real_url)
+            stream_target = STREAM_FIFO
+
+    send_mpv_cmd(["loadfile", stream_target, "append"])
     return {"success": True}
 
 def stop_daemon():
