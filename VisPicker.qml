@@ -53,7 +53,13 @@ BorderSurface {
     { id: "bubbles", name: "Bubbles", category: "particle", icon: "\uf111" },
     { id: "rain", name: "Rain", category: "particle", icon: "\uf043" },
     { id: "butterfly", name: "Butterfly", category: "particle", icon: "\uf1d8" },
-    { id: "scatter", name: "Scatter", category: "particle", icon: "\uf005" }
+    { id: "scatter", name: "Scatter", category: "particle", icon: "\uf005" },
+
+    // 3D & Vector
+    { id: "plasma", name: "Liquid Plasma", category: "3d", icon: "\uf043" },
+    { id: "osc_warp", name: "Oscilloscope Warp", category: "3d", icon: "\uf1fe" },
+    { id: "crt_scanline", name: "CRT Radar Scope", category: "3d", icon: "\uf26c" },
+    { id: "cyber_tunnel", name: "3D Cyber Tunnel", category: "3d", icon: "\uf135" }
   ]
 
   readonly property var filteredModes: {
@@ -90,7 +96,7 @@ BorderSurface {
       Text {
         width: parent.width - Style.space(48)
         anchors.verticalCenter: parent.verticalCenter
-        text: "Visualizer Styles (37)"
+        text: "Visualizer Styles (" + root.allModes.length + ")"
         color: p ? p.foreground : "#fff"
         font.family: p ? p.fontFamily : "sans-serif"
         font.pixelSize: Style.font.caption; font.bold: true
@@ -117,6 +123,7 @@ BorderSurface {
       Repeater {
         model: [
           { id: "all", label: "All" },
+          { id: "3d", label: "3D & Vector" },
           { id: "classic", label: "Classic" },
           { id: "scope", label: "Scope" },
           { id: "retro", label: "Retro" },

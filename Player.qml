@@ -40,6 +40,10 @@ import "visualizers/daw_wave.js" as VisDAWWave
 import "visualizers/led_scrubber.js" as VisLEDScrubber
 import "visualizers/heatmap_wave.js" as VisHeatmapWave
 import "visualizers/grounded_wave.js" as VisGroundedWave
+import "visualizers/plasma.js" as VisPlasma
+import "visualizers/osc_warp.js" as VisOscWarp
+import "visualizers/crt_scanline.js" as VisCRTScanline
+import "visualizers/cyber_tunnel.js" as VisCyberTunnel
 
 // HUD header + visualizer canvas + seek bar
 Item {
@@ -157,7 +161,9 @@ Item {
     "siriwave": VisSiriWave.render, "soundcloud_wave": VisSoundCloudWave.render,
     "telegram_wave": VisTelegramWave.render, "daw_wave": VisDAWWave.render,
     "led_scrubber": VisLEDScrubber.render, "heatmap_wave": VisHeatmapWave.render,
-    "grounded_wave": VisGroundedWave.render
+    "grounded_wave": VisGroundedWave.render, "plasma": VisPlasma.render,
+    "osc_warp": VisOscWarp.render, "crt_scanline": VisCRTScanline.render,
+    "cyber_tunnel": VisCyberTunnel.render
   })
 
   readonly property var _modeLabels: ({
@@ -174,7 +180,9 @@ Item {
     "siriwave": "Siri Wave", "soundcloud_wave": "SoundCloud Wave",
     "telegram_wave": "Telegram Wave", "daw_wave": "DAW Peak Wave",
     "led_scrubber": "LED Scrubber", "heatmap_wave": "Heatmap Wave",
-    "grounded_wave": "Baseline Wave"
+    "grounded_wave": "Baseline Wave", "plasma": "Liquid Plasma",
+    "osc_warp": "Oscilloscope Warp", "crt_scanline": "CRT Radar Scope",
+    "cyber_tunnel": "3D Cyber Tunnel"
   })
 
   function requestPaint() { if (visCanvas) visCanvas.requestPaint() }
