@@ -61,7 +61,7 @@ Panel {
   property string visMode: "siriwave"
   property bool visPickerOpen: false
   property bool eqPickerOpen: false
-  property var visModes: ["bars", "bars_dot", "bars_outline", "bricks", "columns", "classic_led", "peaks", "wave", "scope", "heartbeat", "sine", "siriwave", "soundcloud_wave", "telegram_wave", "daw_wave", "led_scrubber", "heatmap_wave", "grounded_wave", "plasma", "osc_warp", "crt_scanline", "cyber_tunnel", "retro", "scatter", "flame", "pulse", "matrix", "binary", "butterfly", "sakura", "firework", "bubbles", "rain", "terrain", "logo", "firefly", "geyser", "mosaic", "sand", "stereo", "ascii"]
+  property var visModes: ["bars", "bars_dot", "bars_outline", "bricks", "columns", "classic_led", "peaks", "wave", "scope", "heartbeat", "sine", "siriwave", "soundcloud_wave", "telegram_wave", "daw_wave", "led_scrubber", "heatmap_wave", "grounded_wave", "glsl_plasma", "glsl_audio_tunnel", "glsl_electric_sphere", "plasma", "osc_warp", "crt_scanline", "cyber_tunnel", "retro", "scatter", "flame", "pulse", "matrix", "binary", "butterfly", "sakura", "firework", "bubbles", "rain", "terrain", "logo", "firefly", "geyser", "mosaic", "sand", "stereo", "ascii"]
 
   // Visualizer state
   property var visBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]

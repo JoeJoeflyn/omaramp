@@ -56,7 +56,10 @@ BorderSurface {
     { id: "scatter", name: "Scatter", category: "particle", icon: "\uf005" },
 
     // 3D & Vector
-    { id: "plasma", name: "Liquid Plasma", category: "3d", icon: "\uf043" },
+    { id: "glsl_plasma", name: "GPU Plasma (GLSL)", category: "3d", icon: "\uf043" },
+    { id: "glsl_audio_tunnel", name: "GPU Wormhole (GLSL)", category: "3d", icon: "\uf135" },
+    { id: "glsl_electric_sphere", name: "GPU Lightning Orb (GLSL)", category: "3d", icon: "\uf0e7" },
+    { id: "plasma", name: "Liquid Plasma (2D)", category: "3d", icon: "\uf043" },
     { id: "osc_warp", name: "Oscilloscope Warp", category: "3d", icon: "\uf1fe" },
     { id: "crt_scanline", name: "CRT Radar Scope", category: "3d", icon: "\uf26c" },
     { id: "cyber_tunnel", name: "3D Cyber Tunnel", category: "3d", icon: "\uf135" }

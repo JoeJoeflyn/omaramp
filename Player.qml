@@ -182,7 +182,10 @@ Item {
     "led_scrubber": "LED Scrubber", "heatmap_wave": "Heatmap Wave",
     "grounded_wave": "Baseline Wave", "plasma": "Liquid Plasma",
     "osc_warp": "Oscilloscope Warp", "crt_scanline": "CRT Radar Scope",
-    "cyber_tunnel": "3D Cyber Tunnel"
+    "cyber_tunnel": "3D Cyber Tunnel",
+    "glsl_plasma": "GPU Plasma (GLSL)",
+    "glsl_audio_tunnel": "GPU Wormhole (GLSL)",
+    "glsl_electric_sphere": "GPU Lightning Orb (GLSL)"
   })
 
   function requestPaint() { if (visCanvas) visCanvas.requestPaint() }
@@ -433,10 +436,40 @@ Item {
         color: "#06070a"
         borderSpec: Border.flat(p.isPlaying ? Qt.rgba(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b, 0.70) : Qt.rgba(1, 1, 1, 0.12), 1)
 
+        ShaderEffect {
+          id: gpuShader
+          anchors.fill: parent
+          anchors.margins: Style.space(3)
+          visible: p.visMode.indexOf("glsl_") === 0
+          z: 4
+
+          readonly property real u_time: p.visFrame * 0.025
+          readonly property real u_bass: {
+            if (!p || !p.visBands || p.visBands.length < 4) return 0.0
+            var s = 0; for (var i = 0; i < 4; i++) s += (p.visBands[i] || 0)
+            return s / 4.0
+          }
+          readonly property real u_mids: {
+            if (!p || !p.visBands || p.visBands.length < 14) return 0.0
+            var s = 0; for (var i = 4; i < 14; i++) s += (p.visBands[i] || 0)
+            return s / 10.0
+          }
+          readonly property real u_highs: {
+            if (!p || !p.visBands || p.visBands.length < 24) return 0.0
+            var s = 0; for (var i = 14; i < 24; i++) s += (p.visBands[i] || 0)
+            return s / 10.0
+          }
+          readonly property real u_beat: root.beatDropPulse
+          readonly property vector3d u_accent: Qt.vector3d(p.dynamicAccent.r, p.dynamicAccent.g, p.dynamicAccent.b)
+
+          fragmentShader: p.visMode.indexOf("glsl_") === 0 ? ("shaders/" + p.visMode + ".frag.qsb") : "shaders/glsl_plasma.frag.qsb"
+        }
+
         Canvas {
           id: visCanvas
           anchors.fill: parent
           anchors.margins: Style.space(3)
+          visible: p.visMode.indexOf("glsl_") !== 0
           z: 4
 
           onPaint: {
