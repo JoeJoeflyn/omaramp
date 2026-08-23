@@ -76,7 +76,11 @@ Panel {
   property string plImportError: ""
 
   onOpenedChanged: {
-    if (!opened) {
+    if (opened) {
+      // Pre-warm mpv so it's ready before the user clicks a song.
+      // This eliminates cold-start delay after reboot.
+      if (!root.isRunning) warmupProc.running = true
+    } else {
       stopSpectrum()
       root.visPickerOpen = false
       root.eqPickerOpen = false
@@ -487,7 +491,33 @@ Panel {
       root.loadingVid = ""
       root.refresh()
       if (root.opened) loadHistory()
+      // On cold start (first play after reboot) mpv needs 1-4s to boot + buffer.
+      // Poll again at 1s and 3.5s so the UI catches the playing state.
+      coldStartTimer.restart()
     }
+  }
+
+  Timer {
+    id: coldStartTimer
+    interval: 1000; repeat: false; running: false
+    onTriggered: {
+      root.refresh()
+      coldStartTimer2.restart()
+    }
+  }
+
+  Timer {
+    id: coldStartTimer2
+    interval: 2500; repeat: false; running: false
+    onTriggered: root.refresh()
+  }
+
+  // Silently pre-warms the mpv daemon when the panel opens.
+  // Runs start_daemon which is a no-op if mpv is already running.
+  Process {
+    id: warmupProc
+    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "start_daemon"]
+    onExited: root.refresh()
   }
 
   Process {

@@ -1442,6 +1442,10 @@ if __name__ == "__main__":
         print(json.dumps(remove_from_queue(idx)))
     elif action == "queue_clear":
         print(json.dumps(clear_queue()))
+    elif action == "start_daemon":
+        start_mpv_daemon()
+        start_spectrum_daemon()
+        print(json.dumps({"success": True, "running": is_mpv_running()}))
     elif action == "stop_daemon":
         print(json.dumps(stop_daemon()))
     elif action == "lyrics":
