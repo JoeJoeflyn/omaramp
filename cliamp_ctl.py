@@ -9,6 +9,7 @@ import time
 import re
 import signal
 import shutil
+import fcntl
 import urllib.request
 import urllib.parse
 try:
@@ -32,6 +33,7 @@ SOCK_PATH = os.path.join(RUN_DIR, "mpv.sock")
 STREAM_FIFO = os.path.join(RUN_DIR, "stream.fifo")
 STREAM_PID_FILE = os.path.join(RUN_DIR, "stream_ytdlp.pid")
 SPECTRUM_PID_FILE = os.path.join(RUN_DIR, "spectrum.pid")
+MPV_LOCK_FILE = os.path.join(RUN_DIR, "mpv.lock")
 
 CACHE_DIR = os.path.expanduser("~/.cache/omaramp")
 AUDIO_CACHE_DIR = os.path.join(CACHE_DIR, "audio")
@@ -333,7 +335,16 @@ def stop_spectrum_daemon():
     terminate_tracked_pid(SPECTRUM_PID_FILE, expected_signature="spectrum.py")
 
 def start_mpv_daemon():
-    if not is_mpv_running():
+    if is_mpv_running():
+        return
+    # File lock prevents two processes from starting mpv at once
+    # (warmup vs play_item race after reboot)
+    lock_fd = os.open(MPV_LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        # Another process may have started mpv while we waited for the lock
+        if is_mpv_running():
+            return
         if os.path.exists(SOCK_PATH):
             try:
                 os.remove(SOCK_PATH)
@@ -361,6 +372,9 @@ def start_mpv_daemon():
             if is_mpv_running(timeout=0.1):
                 break
         apply_audio_fx()
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
 
 def record_history(title, artist, url, dur):
     try:
