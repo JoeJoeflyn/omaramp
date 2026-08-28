@@ -77,6 +77,7 @@ def run():
     signal.signal(signal.SIGTERM, cleanup)
 
     chunk_bytes = CHUNK * 2
+    empty_reads = 0
 
     while True:
         try:
@@ -86,11 +87,22 @@ def run():
                 if proc is None:
                     time.sleep(1.0)
                     continue
+                empty_reads = 0
 
             data = proc.stdout.read(chunk_bytes)
             if not data or len(data) < chunk_bytes:
+                empty_reads += 1
+                if empty_reads > 25:
+                    try:
+                        if proc:
+                            proc.terminate()
+                    except Exception:
+                        pass
+                    proc = start_recorder()
+                    empty_reads = 0
                 time.sleep(0.02)
                 continue
+            empty_reads = 0
 
             # Zero-copy C numpy buffer conversion (100x faster than struct.unpack)
             raw_int16 = np.frombuffer(data, dtype=np.int16)

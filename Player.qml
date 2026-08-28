@@ -303,6 +303,7 @@ Item {
           Image {
             anchors.fill: parent; anchors.margins: 1
             visible: p.artPath !== ""
+            asynchronous: true
             source: (p.artPath && (p.artPath.indexOf("http://") === 0 || p.artPath.indexOf("https://") === 0 || p.artPath.indexOf("file://") === 0)) ? p.artPath : (p.artPath ? "file://" + p.artPath : "")
             fillMode: Image.PreserveAspectCrop
             sourceSize.width: 72; sourceSize.height: 72

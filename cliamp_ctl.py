@@ -50,11 +50,31 @@ def get_cached_stream_url(url):
             cache = json.load(f)
         entry = cache.get(url)
         if entry:
-            if time.time() - entry.get("timestamp", 0) < 14400:
-                return entry.get("direct_url")
+            if time.time() - entry.get("timestamp", 0) < 7200:
+                d_url = entry.get("direct_url")
+                if d_url:
+                    m = re.search(r"[?&]expire=(\d+)", d_url)
+                    if m:
+                        exp_ts = int(m.group(1))
+                        if time.time() > (exp_ts - 120):
+                            return None
+                    return d_url
     except Exception:
         pass
     return None
+
+def invalidate_stream_cache(url):
+    if not url or not os.path.exists(STREAM_CACHE_PATH):
+        return
+    try:
+        with open(STREAM_CACHE_PATH, "r", encoding="utf-8") as f:
+            cache = json.load(f)
+        if url in cache:
+            cache.pop(url, None)
+            with open(STREAM_CACHE_PATH, "w", encoding="utf-8") as f:
+                json.dump(cache, f)
+    except Exception:
+        pass
 
 def set_cached_stream_url(url, direct_url):
     if not url or not direct_url:
@@ -307,7 +327,19 @@ def is_mpv_running(timeout=0.2):
     if not os.path.exists(SOCK_PATH):
         return False
     res = send_mpv_cmd(["get_property", "idle-active"], timeout=timeout)
-    return res is not None and res.get("error") == "success"
+    if res is None:
+        try:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.settimeout(0.1)
+            s.connect(SOCK_PATH)
+            s.close()
+        except (ConnectionRefusedError, FileNotFoundError, socket.timeout):
+            try:
+                os.remove(SOCK_PATH)
+            except Exception:
+                pass
+        return False
+    return res.get("error") == "success"
 
 def start_spectrum_daemon():
     if os.path.exists(SPECTRUM_PID_FILE):
@@ -355,16 +387,18 @@ def start_mpv_daemon():
             "--no-video",
             "--idle=yes",
             "--ao=pipewire,pulse,alsa",
+            "--audio-stream-silence=yes",
+            "--ytdl=yes",
+            "--ytdl-format=bestaudio[ext=m4a]/bestaudio/18/best",
             f"--input-ipc-server={SOCK_PATH}",
             "--title=Omaramp",
             "--script-opts=mpris-identity=Omaramp",
             "--keep-open=yes",
             "--volume=80",
-            "--demuxer-lavf-probesize=32768",
-            "--demuxer-lavf-buffersize=32768",
             "--cache=yes",
-            "--demuxer-max-bytes=10M",
-            "--demuxer-readahead-secs=30"
+            "--cache-pause=no",
+            "--demuxer-max-bytes=32M",
+            "--demuxer-readahead-secs=60"
         ]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         for _ in range(30):
@@ -733,12 +767,15 @@ def get_status():
 
         is_idle = idle_res.get("data") is True if idle_res else False
         is_paused = pause_res.get("data") is True if pause_res else False
+        eof_res = send_mpv_cmd(["get_property", "eof-reached"])
+        is_eof = eof_res.get("data") is True if eof_res else False
 
         if is_idle:
-            q = read_queue()
-            if q:
-                play_next_in_queue()
-                return get_status()
+            if is_eof:
+                q = read_queue()
+                if q:
+                    play_next_in_queue()
+                    return get_status()
             state = "stopped"
         elif is_paused:
             state = "paused"
@@ -1165,18 +1202,19 @@ def save_youtube_meta(url, title, artist):
             except Exception:
                 pass
 
-def resolve_youtube_stream_url(url):
-    """Resolve direct HTTPS stream URL for YouTube audio with 4-hour caching for instantaneous playback."""
+def resolve_youtube_stream_url(url, force_refresh=False):
+    """Resolve direct HTTPS stream URL for YouTube audio with smart caching and auto-invalidation."""
     if not url:
         return None
-    cached = get_cached_stream_url(url)
-    if cached:
-        return cached
+    if not force_refresh:
+        cached = get_cached_stream_url(url)
+        if cached:
+            return cached
     try:
         r = subprocess.run([
             "yt-dlp", "--no-warnings",
             "--extractor-args", "youtube:player_client=android,web",
-            "-f", "18/bestaudio/best",
+            "-f", "bestaudio[ext=m4a]/bestaudio/18/best",
             "--no-check-certificates",
             "--no-playlist",
             "-g", "--", url
@@ -1222,7 +1260,7 @@ def stream_youtube(url):
     write_fd = os.open(STREAM_FIFO, os.O_WRONLY)
     os.close(read_fd)
     proc = subprocess.Popen(
-        ["yt-dlp", "--no-warnings", "-f", "18/best", "-o", "-", "--", url],
+        ["yt-dlp", "--no-warnings", "-f", "bestaudio[ext=m4a]/bestaudio/18/best", "-o", "-", "--", url],
         stdout=os.fdopen(write_fd, "wb"),
         stderr=subprocess.DEVNULL,
         start_new_session=True
@@ -1260,26 +1298,34 @@ def resolve_track_url(url, title=None, artist=None):
     
     return None, title, artist
 
-def play_item(url, title=None, artist=None):
+def play_item(url, title=None, artist=None, pos=0):
     real_url, final_title, final_artist = resolve_track_url(url, title, artist)
     if not real_url:
         return {"success": False, "error": "Unable to resolve track"}
     start_mpv_daemon()
     start_spectrum_daemon()
     record_history(final_title, final_artist, real_url, 0)
-    save_now_playing(final_title, final_artist, real_url)
+    save_now_playing(final_title, final_artist, real_url, pos)
     
     stream_target = real_url
-    if is_youtube_url(real_url):
+    is_yt = is_youtube_url(real_url)
+    if is_yt:
         save_youtube_meta(real_url, final_title, final_artist)
         direct_url = resolve_youtube_stream_url(real_url)
         if direct_url:
             stream_target = direct_url
         else:
-            stream_youtube(real_url)
-            stream_target = STREAM_FIFO
+            stream_target = real_url
 
-    send_mpv_cmd(["loadfile", stream_target, "replace"])
+    load_opts = {}
+    if pos and int(pos) > 0:
+        load_opts["start"] = str(int(pos))
+
+    if load_opts:
+        send_mpv_cmd(["loadfile", stream_target, "replace", -1, load_opts])
+    else:
+        send_mpv_cmd(["loadfile", stream_target, "replace"])
+
     if final_title:
         send_mpv_cmd(["set_property", "force-media-title", final_title])
         import threading
@@ -1302,8 +1348,7 @@ def queue_item(url, title=None, artist=None):
         if direct_url:
             stream_target = direct_url
         else:
-            stream_youtube(real_url)
-            stream_target = STREAM_FIFO
+            stream_target = real_url
 
     send_mpv_cmd(["loadfile", stream_target, "append"])
     return {"success": True}
@@ -1359,25 +1404,29 @@ if __name__ == "__main__":
             url = sys.argv[2]
             t = sys.argv[3] if len(sys.argv) > 3 else ""
             a = sys.argv[4] if len(sys.argv) > 4 else ""
-            print(json.dumps(play_item(url, t, a)))
+            pos = int(sys.argv[5]) if len(sys.argv) > 5 else 0
+            print(json.dumps(play_item(url, t, a, pos=pos)))
         else:
             start_mpv_daemon()
             idle_res = send_mpv_cmd(["get_property", "idle-active"])
             if idle_res and idle_res.get("data") is True:
                 q = read_queue()
                 if q:
-                    play_next_in_queue()
+                    print(json.dumps(play_next_in_queue()))
                 else:
                     np = read_now_playing()
                     if np.get("url"):
-                        play_item(np.get("url"), np.get("title"), np.get("artist"))
+                        pos = int(np.get("pos", 0))
+                        print(json.dumps(play_item(np.get("url"), np.get("title"), np.get("artist"), pos=pos)))
                     else:
                         hist = parse_history(1)
                         if hist and hist[0].get("path"):
-                            play_item(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))
+                            print(json.dumps(play_item(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))))
+                        else:
+                            print(json.dumps({"success": False, "error": "No track to play"}))
             else:
                 send_mpv_cmd(["set_property", "pause", False])
-            print(json.dumps({"success": True}))
+                print(json.dumps({"success": True}))
     elif action == "pause":
         send_mpv_cmd(["set_property", "pause", True])
         print(json.dumps({"success": True}))
@@ -1387,18 +1436,21 @@ if __name__ == "__main__":
         if idle_res and idle_res.get("data") is True:
             q = read_queue()
             if q:
-                play_next_in_queue()
+                print(json.dumps(play_next_in_queue()))
             else:
                 np = read_now_playing()
                 if np.get("url"):
-                    play_item(np.get("url"), np.get("title"), np.get("artist"))
+                    pos = int(np.get("pos", 0))
+                    print(json.dumps(play_item(np.get("url"), np.get("title"), np.get("artist"), pos=pos)))
                 else:
                     hist = parse_history(1)
                     if hist and hist[0].get("path"):
-                        play_item(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))
+                        print(json.dumps(play_item(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))))
+                    else:
+                        print(json.dumps({"success": False, "error": "No track to play"}))
         else:
             send_mpv_cmd(["cycle", "pause"])
-        print(json.dumps({"success": True}))
+            print(json.dumps({"success": True}))
     elif action == "start_spectrum":
         start_spectrum_daemon()
         print(json.dumps({"success": True}))
@@ -1443,7 +1495,8 @@ if __name__ == "__main__":
         url = sys.argv[2] if len(sys.argv) > 2 else ""
         t = sys.argv[3] if len(sys.argv) > 3 else ""
         a = sys.argv[4] if len(sys.argv) > 4 else ""
-        print(json.dumps(play_item(url, t, a)))
+        pos = int(sys.argv[5]) if len(sys.argv) > 5 else 0
+        print(json.dumps(play_item(url, t, a, pos=pos)))
     elif action in ["queue", "queue_add"]:
         url = sys.argv[2] if len(sys.argv) > 2 else ""
         t = sys.argv[3] if len(sys.argv) > 3 else ""
@@ -1477,15 +1530,7 @@ if __name__ == "__main__":
             print(json.dumps({"success": False, "error": "no saved track"}))
         else:
             pos = int(np.get("pos", 0))
-            play_item(url, np.get("title", ""), np.get("artist", ""))
-            if pos > 5:
-                for _ in range(20):
-                    time.sleep(0.5)
-                    dur = send_mpv_cmd(["get_property", "duration"])
-                    if dur and dur.get("data") and float(dur["data"]) > 0:
-                        break
-                time.sleep(1)
-                send_mpv_cmd(["seek", pos, "absolute"])
+            print(json.dumps(play_item(url, np.get("title", ""), np.get("artist", ""), pos=pos)))
     elif action == "set_vis_mode":
         mode = sys.argv[2] if len(sys.argv) > 2 else "siriwave"
         print(json.dumps(set_vis_mode(mode)))

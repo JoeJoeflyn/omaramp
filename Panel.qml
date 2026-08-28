@@ -93,6 +93,15 @@ Panel {
     loadPlaylists()
     loadHistory()
     loadQueue()
+    warmupTimer.restart()
+  }
+
+  Timer {
+    id: warmupTimer
+    interval: 350; repeat: false; running: false
+    onTriggered: {
+      if (!root.isRunning && !warmupProc.running) warmupProc.running = true
+    }
   }
 
   function startSpectrum() {
@@ -274,7 +283,12 @@ Panel {
     root.activePlaylist = null
   }
 
-  function doResume() { runCmd(["resume"]); root.resumeVisible = false; root.loadingVid = "" }
+  function doResume() {
+    root.playbackState = "playing"
+    root.loadingVid = root.resumeInfo ? root.resumeInfo.url : ""
+    root.resumeVisible = false
+    runCmd(["resume"])
+  }
 
   function playUrl(url, title, artist) {
     if (!url || !url.trim()) return
@@ -442,7 +456,7 @@ Panel {
 
   Process {
     id: historyProc
-    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "history", "200"]
+    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "history", "40"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -499,7 +513,7 @@ Panel {
 
   Timer {
     id: coldStartTimer
-    interval: 1000; repeat: false; running: false
+    interval: 350; repeat: false; running: false
     onTriggered: {
       root.refresh()
       coldStartTimer2.restart()
@@ -508,7 +522,7 @@ Panel {
 
   Timer {
     id: coldStartTimer2
-    interval: 2500; repeat: false; running: false
+    interval: 1000; repeat: false; running: false
     onTriggered: root.refresh()
   }
 
@@ -666,6 +680,9 @@ Panel {
       Image {
         anchors.fill: parent
         source: root.artPath
+        asynchronous: true
+        sourceSize.width: 120
+        sourceSize.height: 120
         fillMode: Image.PreserveAspectCrop
         visible: root.artPath !== ""
         opacity: 0.12
