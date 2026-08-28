@@ -546,7 +546,8 @@ Panel {
     onTriggered: root.refresh()
   }
 
-  readonly property var _xdg: Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000"
+  readonly property string _home: Quickshell.env("HOME") || ""
+  readonly property string _xdg: Quickshell.env("XDG_RUNTIME_DIR") || ("/run/user/" + (Quickshell.env("UID") || "1000"))
   readonly property string spectrumPath: _xdg + "/omaramp/spectrum.json"
 
   FileView {
