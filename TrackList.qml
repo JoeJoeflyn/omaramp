@@ -12,6 +12,31 @@ Column {
   width: parent ? parent.width : 0
   spacing: Style.space(6)
 
+  function isTrackCurrent(itemUrl, itemTitle, itemArtist) {
+    if (!p || p.currentTrack === "No track loaded" || p.currentTrack === "") return false
+    var curU = p.currentUrl ? p.currentUrl.trim() : ""
+    var itmU = itemUrl ? itemUrl.trim() : ""
+    
+    // When both URLs exist, matching URL is the single source of truth
+    if (curU !== "" && itmU !== "") {
+      return curU === itmU
+    }
+    // If one has a URL and the other doesn't, they are not the same item
+    if (curU !== "" || itmU !== "") {
+      return false
+    }
+    
+    // Fallback when neither has a URL (e.g. offline audio streams)
+    var curT = p.currentTrack ? p.currentTrack.trim() : ""
+    var itmT = itemTitle ? itemTitle.trim() : ""
+    if (curT === "" || itmT === "" || curT !== itmT) return false
+    
+    var curA = p.currentArtist ? p.currentArtist.trim() : ""
+    var itmA = itemArtist ? itemArtist.trim() : ""
+    if (curA !== "" && itmA !== "") return curA === itmA
+    return true
+  }
+
   // Search / URL Input Bar
   Row {
     width: parent.width
@@ -248,7 +273,7 @@ Column {
         model: (p.selectedTab === "search" && !p.isSearching) ? p.searchResults : []
         delegate: BorderSurface {
           id: sRow
-          readonly property bool isCurrent: (p.currentUrl === modelData.url) || (p.currentTrack === modelData.title && p.currentTrack !== "No track loaded")
+          readonly property bool isCurrent: root.isTrackCurrent(modelData.url, modelData.title, modelData.artist)
           width: parent.width; implicitHeight: Style.space(32); radius: Style.cornerRadius
           color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14) : (sRowMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
           borderSpec: isCurrent ? Border.flat(Color.accent, 1) : Border.none
@@ -350,7 +375,7 @@ Column {
         model: p.selectedTab === "history" ? p.historyList : []
         delegate: BorderSurface {
           id: hRow
-          readonly property bool isCurrent: (p.currentUrl === modelData.path) || (p.currentTrack === modelData.title && p.currentTrack !== "No track loaded")
+          readonly property bool isCurrent: root.isTrackCurrent(modelData.path, modelData.title, modelData.artist)
           width: parent.width; implicitHeight: Style.space(32); radius: Style.cornerRadius
           color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14) : (hRowMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
           borderSpec: isCurrent ? Border.flat(Color.accent, 1) : Border.none
@@ -699,7 +724,7 @@ Column {
             model: (p.activePlaylist && p.activePlaylist.tracks) ? p.activePlaylist.tracks : []
             delegate: BorderSurface {
               id: plTrackRow
-              readonly property bool isCurrent: (p.currentUrl === modelData.url) || (p.currentTrack === modelData.title && p.currentTrack !== "No track loaded")
+              readonly property bool isCurrent: root.isTrackCurrent(modelData.url, modelData.title, modelData.artist)
               width: parent.width; implicitHeight: Style.space(28); radius: Style.cornerRadius
               color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : (plTrackRowMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
               borderSpec: isCurrent ? Border.flat(Color.accent, 1) : Border.none

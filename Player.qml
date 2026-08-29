@@ -57,6 +57,8 @@ Item {
   property var lyricsLines: []
   property int lyricsCurrentIdx: -1
   property string lyricsTrack: ""
+  property string lyricsArtist: ""
+  property string lyricsUrl: ""
 
   property real beatDropPulse: 0.0
   property real _bassAvg: 0.0
@@ -82,7 +84,7 @@ Item {
 
   function toggleLyrics() {
     lyricsVisible = !lyricsVisible
-    if (lyricsVisible && (lyricsLines.length === 0 || lyricsTrack !== p.currentTrack)) {
+    if (lyricsVisible && (lyricsLines.length === 0 || lyricsTrack !== p.currentTrack || lyricsArtist !== p.currentArtist || lyricsUrl !== p.currentUrl)) {
       fetchLyrics()
     }
   }
@@ -91,6 +93,8 @@ Item {
     lyricsLines = []
     lyricsCurrentIdx = -1
     lyricsTrack = p.currentTrack
+    lyricsArtist = p.currentArtist
+    lyricsUrl = p.currentUrl
     lyricsProc.running = false
     lyricsProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "lyrics", p.currentTrack, p.currentArtist, p.currentUrl]
     lyricsProc.running = true

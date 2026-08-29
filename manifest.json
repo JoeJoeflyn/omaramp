@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "omaramp",
   "name": "Omaramp",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "author": "JoeJoeflyn",
   "license": "MIT",
   "description": "Retro music player for Omarchy. Winamp-inspired popout panel, live spectrum visualizer, now-playing status, and playlist controls.",
