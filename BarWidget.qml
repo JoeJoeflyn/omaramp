@@ -6,6 +6,12 @@ BarWidget {
   id: root
   moduleName: "omaramp"
 
+  function ensurePanel() {
+    if (!panelLoader.active) {
+      panelLoader.active = true
+    }
+  }
+
   function injectPanel() {
     var target = panelLoader.item
     if (!target) return
@@ -20,25 +26,35 @@ BarWidget {
   }
 
   function togglePanel() {
+    ensurePanel()
     if (panelLoader.item && panelLoader.item.toggle) panelLoader.item.toggle()
+    else Qt.callLater(function() { if (panelLoader.item && panelLoader.item.openFromHotkey) panelLoader.item.openFromHotkey() })
   }
 
   function togglePlayback() {
+    ensurePanel()
     if (panelLoader.item && panelLoader.item.togglePlayback) panelLoader.item.togglePlayback()
+    else Qt.callLater(function() { if (panelLoader.item && panelLoader.item.togglePlayback) panelLoader.item.togglePlayback() })
   }
 
   function nextTrack() {
+    ensurePanel()
     if (panelLoader.item && panelLoader.item.nextTrack) panelLoader.item.nextTrack()
+    else Qt.callLater(function() { if (panelLoader.item && panelLoader.item.nextTrack) panelLoader.item.nextTrack() })
   }
 
   function adjustVolume(delta) {
+    ensurePanel()
     if (panelLoader.item && panelLoader.item.adjustVolume) panelLoader.item.adjustVolume(delta)
+    else Qt.callLater(function() { if (panelLoader.item && panelLoader.item.adjustVolume) panelLoader.item.adjustVolume(delta) })
   }
 
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
 
   function open() {
+    ensurePanel()
     if (panelLoader.item && panelLoader.item.openFromHotkey) panelLoader.item.openFromHotkey()
+    else Qt.callLater(function() { if (panelLoader.item && panelLoader.item.openFromHotkey) panelLoader.item.openFromHotkey() })
   }
 
   function close() {
@@ -60,7 +76,7 @@ BarWidget {
 
   Loader {
     id: panelLoader
-    active: true
+    active: false
     source: Qt.resolvedUrl("Panel.qml")
     visible: false
     onLoaded: {
