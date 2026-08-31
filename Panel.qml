@@ -389,7 +389,8 @@ Panel {
         try {
           var data = JSON.parse(text || "{}")
           root.isRunning = data.running === true
-          root.playbackState = data.state || "stopped"
+          if (!(root.loadingVid !== "" && data.state === "stopped" && actionProc.running))
+            root.playbackState = data.state || "stopped"
           var newTrack = String(data.track || "Omaramp")
           var newUrl = String(data.url || "")
           var trackChanged = (newTrack !== root.currentTrack) || (newUrl !== root.currentUrl)

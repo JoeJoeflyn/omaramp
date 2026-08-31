@@ -401,7 +401,7 @@ def start_mpv_daemon():
             "--demuxer-readahead-secs=60"
         ]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-        for _ in range(30):
+        for _ in range(80):
             time.sleep(0.05)
             if is_mpv_running(timeout=0.1):
                 break
