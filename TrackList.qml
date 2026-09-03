@@ -17,24 +17,23 @@ Column {
     var curU = p.currentUrl ? p.currentUrl.trim() : ""
     var itmU = itemUrl ? itemUrl.trim() : ""
     
-    // When both URLs exist, matching URL is the single source of truth
+    // Direct URL match
+    if (curU !== "" && itmU !== "" && curU === itmU) return true
+    
+    // YouTube video ID match
     if (curU !== "" && itmU !== "") {
-      return curU === itmU
-    }
-    // If one has a URL and the other doesn't, they are not the same item
-    if (curU !== "" || itmU !== "") {
-      return false
+      var curM = curU.match(/(?:v=|youtu\.be\/)([0-9A-Za-z_-]{11})/)
+      var itmM = itmU.match(/(?:v=|youtu\.be\/)([0-9A-Za-z_-]{11})/)
+      if (curM && itmM && curM[1] === itmM[1]) return true
     }
     
-    // Fallback when neither has a URL (e.g. offline audio streams)
-    var curT = p.currentTrack ? p.currentTrack.trim() : ""
-    var itmT = itemTitle ? itemTitle.trim() : ""
-    if (curT === "" || itmT === "" || curT !== itmT) return false
-    
-    var curA = p.currentArtist ? p.currentArtist.trim() : ""
-    var itmA = itemArtist ? itemArtist.trim() : ""
-    if (curA !== "" && itmA !== "") return curA === itmA
-    return true
+    // Fallback title / artist matching
+    var curT = p.currentTrack ? p.currentTrack.trim().toLowerCase() : ""
+    var itmT = itemTitle ? itemTitle.trim().toLowerCase() : ""
+    if (curT !== "" && itmT !== "") {
+      if (curT === itmT || curT.indexOf(itmT) !== -1 || itmT.indexOf(curT) !== -1) return true
+    }
+    return false
   }
 
   // Search / URL Input Bar
@@ -724,15 +723,23 @@ Column {
             model: (p.activePlaylist && p.activePlaylist.tracks) ? p.activePlaylist.tracks : []
             delegate: BorderSurface {
               id: plTrackRow
-              readonly property bool isCurrent: root.isTrackCurrent(modelData.url, modelData.title, modelData.artist)
+              readonly property bool isCurrent: (p.activePlaylist && p.currentPlaylistName === p.activePlaylist.name && p.currentPlaylistIndex === index) || root.isTrackCurrent(modelData.url, modelData.title, modelData.artist)
               width: parent.width; implicitHeight: Style.space(28); radius: Style.cornerRadius
               color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : (plTrackRowMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
               borderSpec: isCurrent ? Border.flat(Color.accent, 1) : Border.none
 
               MouseArea {
                 id: plTrackRowMouse
-                anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                onClicked: p.playUrl(modelData.url, modelData.title, modelData.artist)
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  if (p.activePlaylist) {
+                    p.playPlaylistTrack(p.activePlaylist, index)
+                  } else {
+                    p.playUrl(modelData.url, modelData.title, modelData.artist)
+                  }
+                }
               }
 
               Row {

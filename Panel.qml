@@ -43,6 +43,8 @@ Panel {
   property real volumeDb: 0.0
   property bool shuffleMode: false
   property string repeatMode: "off"
+  property string currentPlaylistName: ""
+  property int currentPlaylistIndex: -1
   property real _lastStatusTime: 0
   property string eqText: "Custom"
   property var audioFx: ({ "eq": "Flat", "loudnorm": false, "spatial": false })
@@ -187,8 +189,45 @@ Panel {
     root.playbackState = "stopped"
     runCmd(["stop"])
   }
-  function nextTrack() { runCmd(["next"]) }
-  function prevTrack() { runCmd(["prev"]) }
+  function nextTrack() {
+    if (root.activePlaylist && root.currentPlaylistName === root.activePlaylist.name && root.currentPlaylistIndex >= 0) {
+      var nextIdx = root.currentPlaylistIndex + 1
+      if (nextIdx < root.activePlaylist.tracks.length) {
+        root.currentPlaylistIndex = nextIdx
+        var t = root.activePlaylist.tracks[nextIdx]
+        if (t) {
+          root.currentTrack = t.title || ""
+          root.currentArtist = t.artist || ""
+          root.playbackState = "buffering"
+        }
+      } else if (root.repeatMode === "all" && root.activePlaylist.tracks.length > 0) {
+        root.currentPlaylistIndex = 0
+        var t0 = root.activePlaylist.tracks[0]
+        if (t0) {
+          root.currentTrack = t0.title || ""
+          root.currentArtist = t0.artist || ""
+          root.playbackState = "buffering"
+        }
+      }
+    }
+    runCmd(["next"])
+    loadQueue()
+  }
+
+  function prevTrack() {
+    if (root.curSecs <= 3.0 && root.activePlaylist && root.currentPlaylistName === root.activePlaylist.name && root.currentPlaylistIndex > 0) {
+      var prevIdx = root.currentPlaylistIndex - 1
+      root.currentPlaylistIndex = prevIdx
+      var t = root.activePlaylist.tracks[prevIdx]
+      if (t) {
+        root.currentTrack = t.title || ""
+        root.currentArtist = t.artist || ""
+        root.playbackState = "buffering"
+      }
+    }
+    runCmd(["prev"])
+    loadQueue()
+  }
   function toggleShuffle() { runCmd(["shuffle"]) }
   function cycleRepeat() { runCmd(["repeat"]) }
 
@@ -351,12 +390,25 @@ Panel {
 
   function playPlaylist(pl) {
     if (!pl || !pl.tracks || pl.tracks.length === 0) return
-    var t0 = pl.tracks[0]
-    playUrl(t0.url || (t0.title + " " + t0.artist), t0.title, t0.artist)
-    for (var i = 1; i < pl.tracks.length; i++) {
-      var t = pl.tracks[i]
-      queueUrl(t.url || (t.title + " " + t.artist), t.title, t.artist)
+    playPlaylistTrack(pl, 0)
+  }
+
+  function playPlaylistTrack(pl, index) {
+    if (!pl || !pl.tracks || pl.tracks.length === 0) return
+    var idx = index || 0
+    root.activePlaylist = pl
+    root.currentPlaylistName = pl.name || "Playlist"
+    root.currentPlaylistIndex = idx
+    var t = pl.tracks[idx]
+    if (t) {
+      root.loadingVid = t.url || (t.title + " " + t.artist)
+      root.currentTrack = t.title || "Buffering..."
+      root.currentArtist = t.artist || ""
+      root.playbackState = "buffering"
     }
+    runCmd(["play_playlist", pl.name || "Playlist", String(idx)])
+    loadQueue()
+    loadHistory()
   }
 
   function stopDaemon() {
@@ -397,6 +449,8 @@ Panel {
           root.currentTrack = newTrack
           root.currentArtist = String(data.artist || "")
           root.currentUrl = newUrl
+          root.currentPlaylistName = String(data.playlist_name || "")
+          root.currentPlaylistIndex = (data.playlist_index !== undefined) ? Number(data.playlist_index) : -1
           root.artPath = String(data.art_path || "")
           root.artColor = String(data.art_color || "")
           if (trackChanged && playerComp.lyricsVisible && playerComp.lyricsTrack !== newTrack) {

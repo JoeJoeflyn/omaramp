@@ -41,6 +41,10 @@ HISTORY_PATH = os.path.expanduser("~/.config/cliamp/history.toml")
 NOW_PLAYING_PATH = os.path.join(CACHE_DIR, "now_playing.json")
 QUEUE_PATH = os.path.join(CACHE_DIR, "queue.json")
 STREAM_CACHE_PATH = os.path.join(CACHE_DIR, "stream_cache.json")
+PREV_STACK_PATH = os.path.join(CACHE_DIR, "prev_stack.json")
+NEXT_STACK_PATH = os.path.join(CACHE_DIR, "next_stack.json")
+PLAYBACK_CONTEXT_PATH = os.path.join(CACHE_DIR, "playback_context.json")
+PLAY_MODE_PATH = os.path.join(CACHE_DIR, "play_mode.json")
 
 def get_cached_stream_url(url):
     if not url or not os.path.exists(STREAM_CACHE_PATH):
@@ -273,13 +277,268 @@ def clear_queue():
     save_queue([])
     return {"success": True}
 
-def play_next_in_queue():
+def get_play_mode():
+    try:
+        if os.path.exists(PLAY_MODE_PATH):
+            with open(PLAY_MODE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {"shuffle": False, "repeat": "off"}
+
+def set_play_mode(mode_dict):
+    try:
+        cur = get_play_mode()
+        cur.update(mode_dict)
+        with open(PLAY_MODE_PATH, "w", encoding="utf-8") as f:
+            json.dump(cur, f)
+    except Exception:
+        pass
+
+def toggle_shuffle():
+    mode = get_play_mode()
+    mode["shuffle"] = not mode.get("shuffle", False)
+    set_play_mode(mode)
+    return mode
+
+def cycle_repeat():
+    mode = get_play_mode()
+    cur = mode.get("repeat", "off")
+    cycle_map = {"off": "all", "all": "one", "one": "off"}
+    mode["repeat"] = cycle_map.get(cur, "off")
+    set_play_mode(mode)
+    return mode
+
+def read_prev_stack():
+    try:
+        if os.path.exists(PREV_STACK_PATH):
+            with open(PREV_STACK_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return data
+    except Exception:
+        pass
+    return []
+
+def save_prev_stack(stack):
+    try:
+        with open(PREV_STACK_PATH, "w", encoding="utf-8") as f:
+            json.dump(stack[-50:], f)
+    except Exception:
+        pass
+
+def push_prev_stack(item):
+    if not item or not item.get("url"):
+        return
+    stack = read_prev_stack()
+    if not stack or stack[-1].get("url") != item.get("url"):
+        stack.append({
+            "url": item.get("url", ""),
+            "title": item.get("title", ""),
+            "artist": item.get("artist", ""),
+            "thumb": item.get("thumb", "")
+        })
+        save_prev_stack(stack)
+
+def clear_prev_stack():
+    save_prev_stack([])
+
+def read_next_stack():
+    try:
+        if os.path.exists(NEXT_STACK_PATH):
+            with open(NEXT_STACK_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return data
+    except Exception:
+        pass
+    return []
+
+def save_next_stack(stack):
+    try:
+        with open(NEXT_STACK_PATH, "w", encoding="utf-8") as f:
+            json.dump(stack[-50:], f)
+    except Exception:
+        pass
+
+def push_next_stack(item):
+    if not item or not item.get("url"):
+        return
+    stack = read_next_stack()
+    if not stack or stack[-1].get("url") != item.get("url"):
+        stack.append({
+            "url": item.get("url", ""),
+            "title": item.get("title", ""),
+            "artist": item.get("artist", ""),
+            "thumb": item.get("thumb", "")
+        })
+        save_next_stack(stack)
+
+def clear_next_stack():
+    save_next_stack([])
+
+def read_playback_context():
+    try:
+        if os.path.exists(PLAYBACK_CONTEXT_PATH):
+            with open(PLAYBACK_CONTEXT_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+    except Exception:
+        pass
+    return {}
+
+def save_playback_context(ctx):
+    try:
+        with open(PLAYBACK_CONTEXT_PATH, "w", encoding="utf-8") as f:
+            json.dump(ctx, f)
+    except Exception:
+        pass
+
+def play_playlist_action(name_or_url, start_index=0):
+    start_index = int(start_index)
+    playlists = parse_playlists()
+    found_pl = None
+    for pl in playlists:
+        if pl.get("name") == name_or_url or pl.get("id") == name_or_url:
+            found_pl = pl
+            break
+    if not found_pl and name_or_url == "Recently Played":
+        recents = parse_history(100)
+        found_pl = {"name": "Recently Played", "tracks": [{"url": r.get("path", ""), "title": r.get("title", ""), "artist": r.get("artist", "")} for r in recents]}
+        
+    if not found_pl or not found_pl.get("tracks"):
+        return {"success": False, "error": "Playlist not found or empty"}
+        
+    tracks = found_pl["tracks"]
+    if start_index < 0 or start_index >= len(tracks):
+        start_index = 0
+        
+    ctx = {
+        "playlist_name": found_pl.get("name", "Playlist"),
+        "tracks": tracks,
+        "index": start_index
+    }
+    save_playback_context(ctx)
+    clear_queue()
+    clear_prev_stack()
+    clear_next_stack()
+    
+    target = tracks[start_index]
+    u = target.get("real_url") or target.get("url") or (target.get("title", "") + " " + target.get("artist", ""))
+    return play_item(u, target.get("title"), target.get("artist"))
+
+def prev_track():
+    pos_res = send_mpv_cmd(["get_property", "time-pos"])
+    cur_s = float(pos_res.get("data") or 0) if (pos_res and pos_res.get("data") is not None) else 0.0
+    
+    # 1. If currently playing track is > 3 seconds in, seek to beginning (standard media player UX)
+    if cur_s > 3.0:
+        send_mpv_cmd(["seek", 0, "absolute"])
+        return {"success": True, "action": "restart"}
+        
+    # 2. Check active playlist context
+    ctx = read_playback_context()
+    if ctx and ctx.get("tracks"):
+        tracks = ctx["tracks"]
+        idx = ctx.get("index", 0)
+        if idx > 0:
+            new_idx = idx - 1
+            ctx["index"] = new_idx
+            save_playback_context(ctx)
+            target = tracks[new_idx]
+            u = target.get("real_url") or target.get("url") or (target.get("title", "") + " " + target.get("artist", ""))
+            return play_item(u, target.get("title"), target.get("artist"), record_prev=False)
+        elif get_play_mode().get("repeat") == "all" and len(tracks) > 0:
+            new_idx = len(tracks) - 1
+            ctx["index"] = new_idx
+            save_playback_context(ctx)
+            target = tracks[new_idx]
+            u = target.get("real_url") or target.get("url") or (target.get("title", "") + " " + target.get("artist", ""))
+            return play_item(u, target.get("title"), target.get("artist"), record_prev=False)
+        else:
+            send_mpv_cmd(["seek", 0, "absolute"])
+            return {"success": True, "action": "restart"}
+
+    # 3. Check prev_stack (if not in a playlist)
+    prev_s = read_prev_stack()
+    if prev_s:
+        prev_item = prev_s.pop()
+        save_prev_stack(prev_s)
+        return play_item(prev_item["url"], prev_item.get("title"), prev_item.get("artist"), record_prev=False)
+
+    # 4. Fallback to History
+    hist = parse_history(10)
+    np = read_now_playing()
+    cur_url = np.get("url", "")
+    target_hist = None
+    for h in hist:
+        h_url = h.get("path", "")
+        if h_url and h_url != cur_url:
+            target_hist = h
+            break
+            
+    if target_hist:
+        return play_item(target_hist["path"], target_hist.get("title"), target_hist.get("artist"), record_prev=False)
+
+    send_mpv_cmd(["seek", 0, "absolute"])
+    return {"success": True, "action": "restart"}
+
+def next_track():
+    pm = get_play_mode()
+    
+    if pm.get("repeat") == "one":
+        send_mpv_cmd(["seek", 0, "absolute"])
+        return {"success": True, "action": "repeat_one"}
+
+    # 1. Check manual queue ("Up Next")
     q = read_queue()
     if q:
-        next_track = q.pop(0)
+        next_track_item = q.pop(0)
         save_queue(q)
-        return play_item(next_track["url"], next_track.get("title"), next_track.get("artist"))
-    return {"success": False, "error": "Queue empty"}
+        return play_item(next_track_item["url"], next_track_item.get("title"), next_track_item.get("artist"))
+
+    # 2. Check active playlist context
+    ctx = read_playback_context()
+    if ctx and ctx.get("tracks"):
+        tracks = ctx["tracks"]
+        idx = ctx.get("index", 0)
+
+        if pm.get("shuffle") and len(tracks) > 1:
+            import random
+            available = [i for i in range(len(tracks)) if i != idx]
+            new_idx = random.choice(available)
+            ctx["index"] = new_idx
+            save_playback_context(ctx)
+            target = tracks[new_idx]
+            u = target.get("real_url") or target.get("url") or (target.get("title", "") + " " + target.get("artist", ""))
+            return play_item(u, target.get("title"), target.get("artist"))
+
+        if idx + 1 < len(tracks):
+            new_idx = idx + 1
+            ctx["index"] = new_idx
+            save_playback_context(ctx)
+            target = tracks[new_idx]
+            u = target.get("real_url") or target.get("url") or (target.get("title", "") + " " + target.get("artist", ""))
+            return play_item(u, target.get("title"), target.get("artist"))
+        elif pm.get("repeat") == "all" and len(tracks) > 0:
+            ctx["index"] = 0
+            save_playback_context(ctx)
+            target = tracks[0]
+            u = target.get("real_url") or target.get("url") or (target.get("title", "") + " " + target.get("artist", ""))
+            return play_item(u, target.get("title"), target.get("artist"))
+        else:
+            return {"success": False, "error": "End of playlist"}
+
+    # 3. Fallback to MPV internal playlist
+    mpv_res = send_mpv_cmd(["playlist-next"])
+    if mpv_res and mpv_res.get("error") == "success":
+        return {"success": True}
+
+    return {"success": False, "error": "No next track"}
+
+def play_next_in_queue():
+    return next_track()
 
 def save_now_playing(title, artist, url="", pos=0):
     try:
@@ -750,8 +1009,10 @@ def get_status():
             "progress": 0.0,
             "volume_db": 0,
             "volume_pct": 80,
-            "shuffle": False,
-            "repeat": "off",
+            "shuffle": get_play_mode().get("shuffle", False),
+            "repeat": get_play_mode().get("repeat", "off"),
+            "playlist_name": "",
+            "playlist_index": -1,
             "eq": cur_eq
         }
 
@@ -772,9 +1033,8 @@ def get_status():
 
         if is_idle:
             if is_eof:
-                q = read_queue()
-                if q:
-                    play_next_in_queue()
+                res = next_track()
+                if res and res.get("success"):
                     return get_status()
             state = "stopped"
         elif is_paused:
@@ -840,6 +1100,9 @@ def get_status():
 
         resume = {"title": np.get("title", ""), "artist": np.get("artist", ""), "url": np.get("url", ""), "pos": np.get("pos", 0)} if np.get("url") else None
         cur_fx = get_audio_fx()
+        ctx = read_playback_context()
+        pl_name = ctx.get("playlist_name", "") if ctx else ""
+        pl_idx = ctx.get("index", -1) if (ctx and "index" in ctx) else -1
         return {
             "running": True,
             "state": state,
@@ -848,6 +1111,8 @@ def get_status():
             "art_path": art_path,
             "art_color": get_dominant_color(art_path),
             "url": np.get("url", ""),
+            "playlist_name": pl_name,
+            "playlist_index": pl_idx,
             "time_current": format_seconds(cur_s),
             "time_total": format_seconds(tot_s),
             "cur_secs": round(cur_s, 2),
@@ -856,8 +1121,8 @@ def get_status():
             "volume_db": round((vol / 100.0) * 36.0 - 30.0, 1),
             "volume_pct": vol,
             "speed": round(float(speed_res.get("data") or 1.0), 2) if speed_res else 1.0,
-            "shuffle": False,
-            "repeat": "all",
+            "shuffle": get_play_mode().get("shuffle", False),
+            "repeat": get_play_mode().get("repeat", "off"),
             "queue_count": len(read_queue()),
             "eq": cur_fx.get("eq", "Flat"),
             "audio_fx": cur_fx,
@@ -874,6 +1139,8 @@ def get_status():
             "artist": "Omaramp",
             "art_path": "",
             "art_color": "",
+            "playlist_name": "",
+            "playlist_index": -1,
             "time_current": "00:00",
             "time_total": "00:00",
             "cur_secs": 0,
@@ -881,8 +1148,8 @@ def get_status():
             "progress": 0.0,
             "volume_db": 0,
             "volume_pct": 80,
-            "shuffle": False,
-            "repeat": "off",
+            "shuffle": get_play_mode().get("shuffle", False),
+            "repeat": get_play_mode().get("repeat", "off"),
             "eq": cur_fx.get("eq", "Flat"),
             "audio_fx": cur_fx,
             "vis_mode": get_vis_mode()
@@ -1298,19 +1565,61 @@ def resolve_track_url(url, title=None, artist=None):
     
     return None, title, artist
 
-def play_item(url, title=None, artist=None, pos=0):
+def prefetch_next_track():
+    try:
+        q = read_queue()
+        target_item = None
+        if q:
+            target_item = q[0]
+        else:
+            ctx = read_playback_context()
+            if ctx and ctx.get("tracks"):
+                idx = ctx.get("index", 0)
+                if idx + 1 < len(ctx["tracks"]):
+                    target_item = ctx["tracks"][idx + 1]
+                elif get_play_mode().get("repeat") == "all" and len(ctx["tracks"]) > 0:
+                    target_item = ctx["tracks"][0]
+        if not target_item:
+            return
+            
+        u = target_item.get("url") or (target_item.get("title", "") + " " + target_item.get("artist", ""))
+        title = target_item.get("title")
+        artist = target_item.get("artist")
+        
+        real_u, _, _ = resolve_track_url(u, title, artist)
+        if real_u:
+            if real_u != u:
+                curr_q = read_queue()
+                if curr_q and curr_q[0].get("url") == u:
+                    curr_q[0]["url"] = real_u
+                    save_queue(curr_q)
+            if is_youtube_url(real_u) and not get_cached_stream_url(real_u):
+                resolve_youtube_stream_url(real_u)
+    except Exception:
+        pass
+
+def play_item(url, title=None, artist=None, pos=0, record_prev=True):
     real_url, final_title, final_artist = resolve_track_url(url, title, artist)
     if not real_url:
         return {"success": False, "error": "Unable to resolve track"}
     start_mpv_daemon()
     start_spectrum_daemon()
-    record_history(final_title, final_artist, real_url, 0)
-    save_now_playing(final_title, final_artist, real_url, pos)
+    
+    if record_prev:
+        cur_np = read_now_playing()
+        if cur_np.get("url") and cur_np.get("url") != real_url:
+            push_prev_stack(cur_np)
+
+    display_title = title if (title and str(title).strip()) else final_title
+    display_artist = artist if (artist and str(artist).strip()) else final_artist
+
+    record_history(display_title, display_artist, real_url, 0)
+    save_now_playing(display_title, display_artist, real_url, pos)
     
     stream_target = real_url
     is_yt = is_youtube_url(real_url)
     if is_yt:
-        save_youtube_meta(real_url, final_title, final_artist)
+        save_youtube_meta(real_url, display_title, display_artist)
         direct_url = resolve_youtube_stream_url(real_url)
         if direct_url:
             stream_target = direct_url
@@ -1326,10 +1635,12 @@ def play_item(url, title=None, artist=None, pos=0):
     else:
         send_mpv_cmd(["loadfile", stream_target, "replace"])
 
-    if final_title:
-        send_mpv_cmd(["set_property", "force-media-title", final_title])
+    if display_title:
+        send_mpv_cmd(["set_property", "force-media-title", display_title])
         import threading
-        threading.Thread(target=fetch_lyrics, args=(final_title, final_artist, real_url), daemon=True).start()
+        threading.Thread(target=fetch_lyrics, args=(display_title, display_artist, real_url), daemon=True).start()
+    import threading
+    threading.Thread(target=prefetch_next_track, daemon=True).start()
     send_mpv_cmd(["set_property", "pause", False])
     return {"success": True}
 
@@ -1474,15 +1785,17 @@ if __name__ == "__main__":
         send_mpv_cmd(["stop"])
         print(json.dumps({"success": True}))
     elif action == "next":
-        q = read_queue()
-        if q:
-            print(json.dumps(play_next_in_queue()))
-        else:
-            send_mpv_cmd(["playlist-next"])
-            print(json.dumps({"success": True}))
+        print(json.dumps(next_track()))
     elif action == "prev":
-        send_mpv_cmd(["playlist-prev"])
-        print(json.dumps({"success": True}))
+        print(json.dumps(prev_track()))
+    elif action == "shuffle":
+        print(json.dumps(toggle_shuffle()))
+    elif action == "repeat":
+        print(json.dumps(cycle_repeat()))
+    elif action == "play_playlist":
+        name = sys.argv[2] if len(sys.argv) > 2 else ""
+        idx = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3].isdigit() else 0
+        print(json.dumps(play_playlist_action(name, idx)))
     elif action == "seek":
         sec = float(sys.argv[2]) if len(sys.argv) > 2 else 0.0
         send_mpv_cmd(["seek", sec, "absolute"])
