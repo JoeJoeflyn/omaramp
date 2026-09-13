@@ -87,6 +87,10 @@ def stop_recorder(proc):
     if proc is None:
         return None
     try:
+        proc.terminate()
+    except Exception:
+        pass
+    try:
         if proc.stdout:
             try:
                 proc.stdout.close()
@@ -148,6 +152,7 @@ def run():
     signal.signal(signal.SIGTERM, cleanup)
 
     chunk_bytes = CHUNK * 2
+    pending = bytearray()
     empty_reads = 0
     stalls = 0
 
@@ -160,6 +165,7 @@ def run():
                 if proc is None:
                     time.sleep(1.0)
                     continue
+                pending = bytearray()
                 empty_reads = 0
                 stalls = 0
 
@@ -172,20 +178,33 @@ def run():
                 if stalls >= 5:
                     proc = stop_recorder(proc)
                     proc = start_recorder()
+                    pending = bytearray()
                     empty_reads = 0
                     stalls = 0
                 continue
             stalls = 0
 
-            data = proc.stdout.read(chunk_bytes)
-            if not data or len(data) < chunk_bytes:
+            try:
+                data = proc.stdout.read(chunk_bytes)
+            except Exception:
+                data = None
+            if data:
+                # ponytail: non-blocking reads return short fragments; accumulate
+                pending += data
+                empty_reads = 0
+            else:
                 empty_reads += 1
-                if empty_reads > 25:
+                if empty_reads > 50:
                     proc = stop_recorder(proc)
                     proc = start_recorder()
+                    pending = bytearray()
                     empty_reads = 0
                 time.sleep(0.02)
                 continue
+            if len(pending) < chunk_bytes:
+                continue
+            data = bytes(pending[:chunk_bytes])
+            del pending[:chunk_bytes]
             empty_reads = 0
 
             if HAVE_NUMPY:
