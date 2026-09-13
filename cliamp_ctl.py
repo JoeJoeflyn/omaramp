@@ -1402,15 +1402,38 @@ def search_tracks(query, limit=10):
                 pass
         results.extend(yt_results)
 
-    # Async prefetch direct stream URLs for top results in background so clicks are instantaneous
-    import threading
+    # Async prefetch direct stream URLs for top results in a detached process
+    # so clicks are instantaneous (threads would die with this one-shot CLI)
     for item in results[:2]:
         u = item.get("url", "")
         if is_youtube_url(u) and not get_cached_stream_url(u):
-            threading.Thread(target=resolve_youtube_stream_url, args=(u,), daemon=True).start()
+            _spawn_detached("prefetch_url", u)
 
     return results
 
+
+def _spawn_detached(*args):
+    # ponytail: daemon threads die with the one-shot CLI; detached proc survives
+    try:
+        subprocess.Popen([sys.executable, os.path.abspath(__file__), *args],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except Exception:
+        pass
+
+def prefetch_url_action(url):
+    try:
+        direct = resolve_youtube_stream_url(url) if is_youtube_url(url) else None
+        return {"success": True, "cached": bool(direct)}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+def prefetch_next_action():
+    try:
+        prefetch_next_track()
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 def is_youtube_url(url):
     if not url:
@@ -1664,10 +1687,9 @@ def play_item(url, title=None, artist=None, pos=0, record_prev=True):
 
     if display_title:
         send_mpv_cmd(["set_property", "force-media-title", display_title])
-        import threading
-        threading.Thread(target=fetch_lyrics, args=(display_title, display_artist, real_url), daemon=True).start()
     import threading
-    threading.Thread(target=prefetch_next_track, daemon=True).start()
+    threading.Thread(target=fetch_lyrics, args=(display_title, display_artist, real_url), daemon=True).start()
+    _spawn_detached("prefetch_next")
     unpause_res = send_mpv_cmd(["set_property", "pause", False])
     if not unpause_res or unpause_res.get("error") != "success":
         time.sleep(0.3)
@@ -1753,6 +1775,11 @@ if __name__ == "__main__":
     elif action == "search":
         q = " ".join(sys.argv[2:]) if len(sys.argv) > 2 else ""
         print(json.dumps(search_tracks(q, 10)))
+    elif action == "prefetch_url":
+        u = sys.argv[2] if len(sys.argv) > 2 else ""
+        print(json.dumps(prefetch_url_action(u)))
+    elif action == "prefetch_next":
+        print(json.dumps(prefetch_next_action()))
     elif action == "play":
         if len(sys.argv) > 2 and sys.argv[2].strip():
             url = sys.argv[2]
