@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Real-time ultra-low-overhead FFT spectrum + waveform capture for Omaramp via PipeWire/Pulse."""
-import os, sys, time, math, subprocess, signal
+import os, sys, time, math, subprocess, signal, select
 
 try:
     import numpy as np
@@ -13,7 +13,7 @@ RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR")
 if RUNTIME_DIR and os.path.isdir(RUNTIME_DIR):
     RUN_DIR = os.path.join(RUNTIME_DIR, "omaramp")
 else:
-    RUN_DIR = os.path.expanduser("~/.cache/omaramp/run")
+    RUN_DIR = "/run/user/%d/omaramp" % os.getuid()
 
 FALLBACK_RUN_DIR = os.path.expanduser("~/.cache/omaramp/run")
 
@@ -83,6 +83,26 @@ def get_monitor_target():
 
     return None
 
+def stop_recorder(proc):
+    if proc is None:
+        return None
+    try:
+        if proc.stdout:
+            try:
+                proc.stdout.close()
+            except Exception:
+                pass
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=1)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+    return None
+
 def start_recorder():
     monitor = get_monitor_target()
 
@@ -91,7 +111,12 @@ def start_recorder():
         cmd = ["parec", "--format=s16le", f"--rate={RATE}", "--channels=1", "--latency-msec=20"]
         if monitor:
             cmd += ["-d", monitor]
-        return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        try:
+            os.set_blocking(proc.stdout.fileno(), False)
+        except Exception:
+            pass
+        return proc
     except Exception:
         pass
 
@@ -102,7 +127,12 @@ def start_recorder():
         if raw_target:
             cmd += ["--target", raw_target]
         cmd.append("-")
-        return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        try:
+            os.set_blocking(proc.stdout.fileno(), False)
+        except Exception:
+            pass
+        return proc
     except Exception:
         return None
 
@@ -111,11 +141,7 @@ def run():
     proc = start_recorder()
 
     def cleanup(sig, frame):
-        try:
-            if proc:
-                proc.terminate()
-        except Exception:
-            pass
+        stop_recorder(proc)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, cleanup)
@@ -123,26 +149,39 @@ def run():
 
     chunk_bytes = CHUNK * 2
     empty_reads = 0
+    stalls = 0
 
     while True:
         try:
             if proc is None or proc.poll() is not None:
+                proc = stop_recorder(proc)
                 time.sleep(0.5)
                 proc = start_recorder()
                 if proc is None:
                     time.sleep(1.0)
                     continue
                 empty_reads = 0
+                stalls = 0
+
+            try:
+                ready, _, _ = select.select([proc.stdout], [], [], 1.0)
+            except Exception:
+                ready = []
+            if not ready:
+                stalls += 1
+                if stalls >= 5:
+                    proc = stop_recorder(proc)
+                    proc = start_recorder()
+                    empty_reads = 0
+                    stalls = 0
+                continue
+            stalls = 0
 
             data = proc.stdout.read(chunk_bytes)
             if not data or len(data) < chunk_bytes:
                 empty_reads += 1
                 if empty_reads > 25:
-                    try:
-                        if proc:
-                            proc.terminate()
-                    except Exception:
-                        pass
+                    proc = stop_recorder(proc)
                     proc = start_recorder()
                     empty_reads = 0
                 time.sleep(0.02)

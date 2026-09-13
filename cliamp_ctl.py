@@ -45,6 +45,26 @@ PREV_STACK_PATH = os.path.join(CACHE_DIR, "prev_stack.json")
 NEXT_STACK_PATH = os.path.join(CACHE_DIR, "next_stack.json")
 PLAYBACK_CONTEXT_PATH = os.path.join(CACHE_DIR, "playback_context.json")
 PLAY_MODE_PATH = os.path.join(CACHE_DIR, "play_mode.json")
+STATE_LOCK_FILE = os.path.join(CACHE_DIR, "state.lock")
+
+_MPV_REQ_ID = 0
+
+def atomic_write_json(path, obj):
+    try:
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(obj, f, indent=2)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except Exception:
+                pass
+        os.replace(tmp, path)
+    except Exception:
+        pass
 
 def get_cached_stream_url(url):
     if not url or not os.path.exists(STREAM_CACHE_PATH):
@@ -75,8 +95,7 @@ def invalidate_stream_cache(url):
             cache = json.load(f)
         if url in cache:
             cache.pop(url, None)
-            with open(STREAM_CACHE_PATH, "w", encoding="utf-8") as f:
-                json.dump(cache, f)
+            atomic_write_json(STREAM_CACHE_PATH, cache)
     except Exception:
         pass
 
@@ -99,8 +118,7 @@ def set_cached_stream_url(url, direct_url):
             oldest = sorted(cache.keys(), key=lambda k: cache[k].get("timestamp", 0))[:20]
             for k in oldest:
                 cache.pop(k, None)
-        with open(STREAM_CACHE_PATH, "w", encoding="utf-8") as f:
-            json.dump(cache, f)
+        atomic_write_json(STREAM_CACHE_PATH, cache)
     except Exception:
         pass
 
@@ -236,41 +254,49 @@ def read_queue():
     return []
 
 def save_queue(q_list):
-    try:
-        with open(QUEUE_PATH, "w", encoding="utf-8") as f:
-            json.dump(q_list, f, indent=2)
-    except Exception:
-        pass
+    atomic_write_json(QUEUE_PATH, q_list)
 
 def add_to_queue(url, title=None, artist=None):
     real_url, final_title, final_artist = resolve_track_url(url, title, artist)
     if not real_url:
         return {"success": False, "error": "Unable to resolve track"}
-    status = get_status()
+    status = get_status(allow_advance=False)
     if not status.get("running") or status.get("state") in ("stopped", "idle"):
         return play_item(real_url, final_title, final_artist)
-    q = read_queue()
     m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", real_url)
     thumb = os.path.join(AUDIO_CACHE_DIR, f"{m.group(1)}.jpg") if m else ""
-    q.append({
-        "url": real_url,
-        "title": final_title,
-        "artist": final_artist,
-        "thumb": thumb
-    })
-    save_queue(q)
+    lock_fd = os.open(STATE_LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        q = read_queue()
+        q.append({
+            "url": real_url,
+            "title": final_title,
+            "artist": final_artist,
+            "thumb": thumb
+        })
+        save_queue(q)
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
     return {"success": True, "queue": q}
 
 def remove_from_queue(idx):
-    q = read_queue()
     try:
         i = int(idx)
+    except Exception:
+        return {"success": False}
+    lock_fd = os.open(STATE_LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        q = read_queue()
         if 0 <= i < len(q):
             q.pop(i)
             save_queue(q)
             return {"success": True, "queue": q}
-    except Exception:
-        pass
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
     return {"success": False}
 
 def clear_queue():
@@ -290,10 +316,9 @@ def set_play_mode(mode_dict):
     try:
         cur = get_play_mode()
         cur.update(mode_dict)
-        with open(PLAY_MODE_PATH, "w", encoding="utf-8") as f:
-            json.dump(cur, f)
     except Exception:
-        pass
+        return
+    atomic_write_json(PLAY_MODE_PATH, cur)
 
 def toggle_shuffle():
     mode = get_play_mode()
@@ -321,11 +346,7 @@ def read_prev_stack():
     return []
 
 def save_prev_stack(stack):
-    try:
-        with open(PREV_STACK_PATH, "w", encoding="utf-8") as f:
-            json.dump(stack[-50:], f)
-    except Exception:
-        pass
+    atomic_write_json(PREV_STACK_PATH, stack[-50:])
 
 def push_prev_stack(item):
     if not item or not item.get("url"):
@@ -355,11 +376,7 @@ def read_next_stack():
     return []
 
 def save_next_stack(stack):
-    try:
-        with open(NEXT_STACK_PATH, "w", encoding="utf-8") as f:
-            json.dump(stack[-50:], f)
-    except Exception:
-        pass
+    atomic_write_json(NEXT_STACK_PATH, stack[-50:])
 
 def push_next_stack(item):
     if not item or not item.get("url"):
@@ -389,20 +406,26 @@ def read_playback_context():
     return {}
 
 def save_playback_context(ctx):
-    try:
-        with open(PLAYBACK_CONTEXT_PATH, "w", encoding="utf-8") as f:
-            json.dump(ctx, f)
-    except Exception:
-        pass
+    atomic_write_json(PLAYBACK_CONTEXT_PATH, ctx)
 
-def play_playlist_action(name_or_url, start_index=0):
+def play_playlist_action(name_or_url, start_index=0, url=None):
     start_index = int(start_index)
     playlists = parse_playlists()
     found_pl = None
-    for pl in playlists:
-        if pl.get("name") == name_or_url or pl.get("id") == name_or_url:
-            found_pl = pl
-            break
+    if url:
+        for pl in playlists:
+            for i, t in enumerate(pl.get("tracks", [])):
+                if t.get("real_url") == url or t.get("url") == url:
+                    found_pl = pl
+                    start_index = i
+                    break
+            if found_pl:
+                break
+    if not found_pl:
+        for pl in playlists:
+            if pl.get("name") == name_or_url or pl.get("id") == name_or_url:
+                found_pl = pl
+                break
     if not found_pl and name_or_url == "Recently Played":
         recents = parse_history(100)
         found_pl = {"name": "Recently Played", "tracks": [{"url": r.get("path", ""), "title": r.get("title", ""), "artist": r.get("artist", "")} for r in recents]}
@@ -551,8 +574,7 @@ def save_now_playing(title, artist, url="", pos=0):
             artist = cur.get("artist", "")
         if not url:
             url = cur.get("url", "")
-        with open(NOW_PLAYING_PATH, "w", encoding="utf-8") as f:
-            json.dump({"title": title or "", "artist": artist or "", "url": url or "", "pos": pos}, f)
+        atomic_write_json(NOW_PLAYING_PATH, {"title": title or "", "artist": artist or "", "url": url or "", "pos": pos})
     except Exception:
         pass
 
@@ -564,23 +586,60 @@ def read_now_playing():
         return {}
 
 def send_mpv_cmd(cmd_list, timeout=1.0):
+    global _MPV_REQ_ID
     if not os.path.exists(SOCK_PATH):
         return None
+    _MPV_REQ_ID += 1
+    req_id = _MPV_REQ_ID
     try:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.settimeout(timeout)
         s.connect(SOCK_PATH)
-        payload = json.dumps({"command": cmd_list}) + "\n"
+        payload = json.dumps({"command": cmd_list, "request_id": req_id}) + "\n"
         s.sendall(payload.encode("utf-8"))
-        res = s.recv(4096).decode("utf-8")
-        s.close()
-        for line in res.splitlines():
-            line = line.strip()
-            if line:
-                return json.loads(line)
+        deadline = time.time() + timeout
+        buf = ""
+        while True:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                try:
+                    s.close()
+                except Exception:
+                    pass
+                return None
+            s.settimeout(remaining)
+            try:
+                chunk = s.recv(65536).decode("utf-8", errors="replace")
+            except socket.timeout:
+                try:
+                    s.close()
+                except Exception:
+                    pass
+                return None
+            if not chunk:
+                try:
+                    s.close()
+                except Exception:
+                    pass
+                return None
+            buf += chunk
+            while "\n" in buf:
+                line, buf = buf.split("\n", 1)
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    continue
+                if isinstance(obj, dict) and obj.get("request_id") == req_id:
+                    try:
+                        s.close()
+                    except Exception:
+                        pass
+                    return obj
     except Exception:
         return None
-    return None
 
 def is_mpv_running(timeout=0.2):
     if not os.path.exists(SOCK_PATH):
@@ -592,7 +651,7 @@ def is_mpv_running(timeout=0.2):
             s.settimeout(0.1)
             s.connect(SOCK_PATH)
             s.close()
-        except (ConnectionRefusedError, FileNotFoundError, socket.timeout):
+        except (ConnectionRefusedError, FileNotFoundError):
             try:
                 os.remove(SOCK_PATH)
             except Exception:
@@ -627,7 +686,7 @@ def stop_spectrum_daemon():
 
 def start_mpv_daemon():
     if is_mpv_running():
-        return
+        return True
     # File lock prevents two processes from starting mpv at once
     # (warmup vs play_item race after reboot)
     lock_fd = os.open(MPV_LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o600)
@@ -635,7 +694,7 @@ def start_mpv_daemon():
         fcntl.flock(lock_fd, fcntl.LOCK_EX)
         # Another process may have started mpv while we waited for the lock
         if is_mpv_running():
-            return
+            return True
         if os.path.exists(SOCK_PATH):
             try:
                 os.remove(SOCK_PATH)
@@ -659,12 +718,18 @@ def start_mpv_daemon():
             "--demuxer-max-bytes=32M",
             "--demuxer-readahead-secs=60"
         ]
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        try:
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except FileNotFoundError:
+            return False
         for _ in range(80):
             time.sleep(0.05)
             if is_mpv_running(timeout=0.1):
                 break
+        if not is_mpv_running():
+            return False
         apply_audio_fx()
+        return True
     finally:
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
         os.close(lock_fd)
@@ -674,8 +739,13 @@ def record_history(title, artist, url, dur):
         def esc(s):
             return (s or "").replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
         entry = f'\n[[entry]]\nplayed_at = "{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}"\npath = "{esc(url)}"\ntitle = "{esc(title)}"\nartist = "{esc(artist)}"\nduration_secs = {int(dur or 0)}\n'
-        with open(HISTORY_PATH, "a", encoding="utf-8") as f:
-            f.write(entry)
+        with open(HISTORY_PATH, "a+", encoding="utf-8") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                f.seek(0, os.SEEK_END)
+                f.write(entry)
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
     except Exception:
         pass
 
@@ -735,10 +805,9 @@ def parse_playlists():
 def save_playlists(pl_list):
     try:
         os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(PLAYLISTS_FILE, "w", encoding="utf-8") as f:
-            json.dump(pl_list, f, indent=2)
     except Exception:
         pass
+    atomic_write_json(PLAYLISTS_FILE, pl_list)
 
 def delete_playlist(name):
     if not name:
@@ -927,10 +996,9 @@ def get_audio_fx():
 def save_audio_fx(fx_dict):
     try:
         os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(AUDIO_FX_FILE, "w") as f:
-            json.dump(fx_dict, f)
     except Exception:
         pass
+    atomic_write_json(AUDIO_FX_FILE, fx_dict)
 
 def apply_audio_fx(preset_name=None, loudnorm=None, spatial=None):
     cur = get_audio_fx()
@@ -938,10 +1006,9 @@ def apply_audio_fx(preset_name=None, loudnorm=None, spatial=None):
         cur["eq"] = preset_name if preset_name in EQ_PRESETS else "Flat"
         try:
             os.makedirs(CACHE_DIR, exist_ok=True)
-            with open(EQ_CACHE_FILE, "w") as f:
-                json.dump({"preset": cur["eq"]}, f)
         except Exception:
             pass
+        atomic_write_json(EQ_CACHE_FILE, {"preset": cur["eq"]})
     if loudnorm is not None:
         cur["loudnorm"] = bool(loudnorm)
     if spatial is not None:
@@ -992,7 +1059,7 @@ def get_dominant_color(img_path):
             pass
     return ""
 
-def get_status():
+def get_status(allow_advance=True):
     cur_eq = get_current_eq()
     if not is_mpv_running():
         return {
@@ -1030,17 +1097,18 @@ def get_status():
         is_paused = pause_res.get("data") is True if pause_res else False
         eof_res = send_mpv_cmd(["get_property", "eof-reached"])
         is_eof = eof_res.get("data") is True if eof_res else False
+        any_ok = any(r is not None for r in (pos_res, dur_res, pause_res, title_res, vol_res, speed_res, idle_res, eof_res))
 
+        if allow_advance and is_eof and (is_idle or is_paused):
+            res = next_track()
+            if res and res.get("success"):
+                return get_status(allow_advance=allow_advance)
         if is_idle:
-            if is_eof:
-                res = next_track()
-                if res and res.get("success"):
-                    return get_status()
             state = "stopped"
         elif is_paused:
             state = "paused"
         else:
-            state = "playing"
+            state = "playing" if any_ok else "stopped"
 
         cur_s = float(pos_res.get("data") or 0) if (pos_res and pos_res.get("data") is not None) else 0.0
         tot_s = float(dur_res.get("data") or 0) if (dur_res and dur_res.get("data") is not None) else 0.0
@@ -1439,11 +1507,7 @@ def fetch_lyrics(title, artist, url=""):
                         break
 
         LYRICS_CACHE[key] = result
-        try:
-            with open(disk_cache, "w", encoding="utf-8") as f:
-                json.dump(result, f)
-        except Exception:
-            pass
+        atomic_write_json(disk_cache, result)
         return result
     except Exception:
         return {"synced": "", "plain": "", "source": ""}
@@ -1456,11 +1520,7 @@ def save_youtube_meta(url, title, artist):
         vid_id = m.group(1)
     if vid_id and (title or artist):
         meta_f = os.path.join(AUDIO_CACHE_DIR, f"{vid_id}.json")
-        try:
-            with open(meta_f, "w", encoding="utf-8") as f:
-                json.dump({"title": title or "", "artist": artist or ""}, f)
-        except Exception:
-            pass
+        atomic_write_json(meta_f, {"title": title or "", "artist": artist or ""})
         # Fetch thumbnail (mqdefault.jpg = 320x180, good quality for small UI)
         thumb_f = os.path.join(AUDIO_CACHE_DIR, f"{vid_id}.jpg")
         if not os.path.exists(thumb_f):
@@ -1494,45 +1554,6 @@ def resolve_youtube_stream_url(url, force_refresh=False):
     except Exception:
         pass
     return None
-
-def stream_youtube(url):
-    """Stream YouTube audio to mpv via a secure private FIFO pipe fallback."""
-    terminate_tracked_pid(STREAM_PID_FILE, expected_signature=["yt-dlp", STREAM_FIFO])
-    os.makedirs(RUN_DIR, mode=0o700, exist_ok=True)
-    try:
-        os.chmod(RUN_DIR, 0o700)
-    except Exception:
-        pass
-
-    if os.path.lexists(STREAM_FIFO):
-        try:
-            if os.path.islink(STREAM_FIFO) or not os.path.exists(STREAM_FIFO):
-                os.unlink(STREAM_FIFO)
-            else:
-                stat = os.stat(STREAM_FIFO)
-                if stat.st_uid != os.getuid():
-                    raise PermissionError(f"FIFO {STREAM_FIFO} is not owned by current user")
-                os.remove(STREAM_FIFO)
-        except Exception as e:
-            if not isinstance(e, FileNotFoundError):
-                raise
-
-    os.mkfifo(STREAM_FIFO, 0o600)
-    try:
-        os.chmod(STREAM_FIFO, 0o600)
-    except Exception:
-        pass
-
-    read_fd = os.open(STREAM_FIFO, os.O_RDONLY | os.O_NONBLOCK)
-    write_fd = os.open(STREAM_FIFO, os.O_WRONLY)
-    os.close(read_fd)
-    proc = subprocess.Popen(
-        ["yt-dlp", "--no-warnings", "-f", "bestaudio[ext=m4a]/bestaudio/18/best", "-o", "-", "--", url],
-        stdout=os.fdopen(write_fd, "wb"),
-        stderr=subprocess.DEVNULL,
-        start_new_session=True
-    )
-    save_tracked_proc(STREAM_PID_FILE, proc.pid, signature=["yt-dlp", STREAM_FIFO])
 
 def resolve_track_url(url, title=None, artist=None):
     """Resolves any track item (Spotify URL, query string, or local path) to a playable URL and metadata."""
@@ -1602,7 +1623,8 @@ def play_item(url, title=None, artist=None, pos=0, record_prev=True):
     real_url, final_title, final_artist = resolve_track_url(url, title, artist)
     if not real_url:
         return {"success": False, "error": "Unable to resolve track"}
-    start_mpv_daemon()
+    if not start_mpv_daemon():
+        return {"success": False, "error": "mpv failed to start"}
     start_spectrum_daemon()
     
     if record_prev:
@@ -1617,6 +1639,7 @@ def play_item(url, title=None, artist=None, pos=0, record_prev=True):
     save_now_playing(display_title, display_artist, real_url, pos)
     
     stream_target = real_url
+    warning = None
     is_yt = is_youtube_url(real_url)
     if is_yt:
         save_youtube_meta(real_url, display_title, display_artist)
@@ -1625,15 +1648,19 @@ def play_item(url, title=None, artist=None, pos=0, record_prev=True):
             stream_target = direct_url
         else:
             stream_target = real_url
+            warning = "direct stream unavailable, trying watch URL"
 
     load_opts = {}
     if pos and int(pos) > 0:
         load_opts["start"] = str(int(pos))
 
     if load_opts:
-        send_mpv_cmd(["loadfile", stream_target, "replace", -1, load_opts])
+        res = send_mpv_cmd(["loadfile", stream_target, "replace", -1, load_opts])
     else:
-        send_mpv_cmd(["loadfile", stream_target, "replace"])
+        res = send_mpv_cmd(["loadfile", stream_target, "replace"])
+    if not res or res.get("error") != "success":
+        err = res.get("error") if isinstance(res, dict) and res.get("error") else "mpv load failed"
+        return {"success": False, "error": err}
 
     if display_title:
         send_mpv_cmd(["set_property", "force-media-title", display_title])
@@ -1641,14 +1668,23 @@ def play_item(url, title=None, artist=None, pos=0, record_prev=True):
         threading.Thread(target=fetch_lyrics, args=(display_title, display_artist, real_url), daemon=True).start()
     import threading
     threading.Thread(target=prefetch_next_track, daemon=True).start()
-    send_mpv_cmd(["set_property", "pause", False])
-    return {"success": True}
+    unpause_res = send_mpv_cmd(["set_property", "pause", False])
+    if not unpause_res or unpause_res.get("error") != "success":
+        time.sleep(0.3)
+        unpause_res = send_mpv_cmd(["set_property", "pause", False])
+        if not unpause_res or unpause_res.get("error") != "success":
+            return {"success": False, "error": "mpv stuck paused"}
+    out = {"success": True}
+    if warning:
+        out["warning"] = warning
+    return out
 
 def queue_item(url, title=None, artist=None):
     real_url, final_title, final_artist = resolve_track_url(url, title, artist)
     if not real_url:
         return {"success": False, "error": "Unable to resolve track"}
-    start_mpv_daemon()
+    if not start_mpv_daemon():
+        return {"success": False, "error": "mpv failed to start"}
     record_history(final_title, final_artist, real_url, 0)
     save_now_playing(final_title, final_artist, real_url)
     
@@ -1661,7 +1697,10 @@ def queue_item(url, title=None, artist=None):
         else:
             stream_target = real_url
 
-    send_mpv_cmd(["loadfile", stream_target, "append"])
+    send_res = send_mpv_cmd(["loadfile", stream_target, "append"])
+    if not send_res or send_res.get("error") != "success":
+        err = send_res.get("error") if isinstance(send_res, dict) and send_res.get("error") else "mpv load failed"
+        return {"success": False, "error": err}
     return {"success": True}
 
 def stop_daemon():
@@ -1684,8 +1723,12 @@ if __name__ == "__main__":
     if action == "status":
         print(json.dumps(get_status()))
     elif action == "history":
-        lim = int(sys.argv[2]) if len(sys.argv) > 2 else 30
-        print(json.dumps(parse_history(lim)))
+        try:
+            lim = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+        except ValueError:
+            print(json.dumps({"success": False, "error": "invalid numeric argument"}))
+        else:
+            print(json.dumps(parse_history(lim)))
     elif action == "playlists":
         custom = parse_playlists()
         result = [{"name": "Recently Played", "count": len(parse_history(500)), "system": True}]
@@ -1715,12 +1758,18 @@ if __name__ == "__main__":
             url = sys.argv[2]
             t = sys.argv[3] if len(sys.argv) > 3 else ""
             a = sys.argv[4] if len(sys.argv) > 4 else ""
-            pos = int(sys.argv[5]) if len(sys.argv) > 5 else 0
-            print(json.dumps(play_item(url, t, a, pos=pos)))
+            try:
+                pos = int(sys.argv[5]) if len(sys.argv) > 5 else 0
+            except ValueError:
+                print(json.dumps({"success": False, "error": "invalid numeric argument"}))
+            else:
+                print(json.dumps(play_item(url, t, a, pos=pos)))
         else:
-            start_mpv_daemon()
-            idle_res = send_mpv_cmd(["get_property", "idle-active"])
-            if idle_res and idle_res.get("data") is True:
+            mpv_ok = start_mpv_daemon()
+            idle_res = send_mpv_cmd(["get_property", "idle-active"]) if mpv_ok else None
+            if not mpv_ok:
+                print(json.dumps({"success": False, "error": "mpv failed to start"}))
+            elif idle_res and idle_res.get("data") is True:
                 q = read_queue()
                 if q:
                     print(json.dumps(play_next_in_queue()))
@@ -1735,6 +1784,8 @@ if __name__ == "__main__":
                             print(json.dumps(play_item(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))))
                         else:
                             print(json.dumps({"success": False, "error": "No track to play"}))
+            elif idle_res is None:
+                print(json.dumps({"success": False, "error": "mpv unreachable"}))
             else:
                 send_mpv_cmd(["set_property", "pause", False])
                 print(json.dumps({"success": True}))
@@ -1742,9 +1793,11 @@ if __name__ == "__main__":
         send_mpv_cmd(["set_property", "pause", True])
         print(json.dumps({"success": True}))
     elif action == "toggle":
-        start_mpv_daemon()
-        idle_res = send_mpv_cmd(["get_property", "idle-active"])
-        if idle_res and idle_res.get("data") is True:
+        mpv_ok = start_mpv_daemon()
+        idle_res = send_mpv_cmd(["get_property", "idle-active"]) if mpv_ok else None
+        if not mpv_ok:
+            print(json.dumps({"success": False, "error": "mpv failed to start"}))
+        elif idle_res and idle_res.get("data") is True:
             q = read_queue()
             if q:
                 print(json.dumps(play_next_in_queue()))
@@ -1759,6 +1812,8 @@ if __name__ == "__main__":
                         print(json.dumps(play_item(hist[0].get("path"), hist[0].get("title"), hist[0].get("artist"))))
                     else:
                         print(json.dumps({"success": False, "error": "No track to play"}))
+        elif idle_res is None:
+            print(json.dumps({"success": False, "error": "mpv unreachable"}))
         else:
             send_mpv_cmd(["cycle", "pause"])
             print(json.dumps({"success": True}))
@@ -1770,8 +1825,13 @@ if __name__ == "__main__":
         print(json.dumps({"success": True}))
     elif action == "speed":
         s = sys.argv[2] if len(sys.argv) > 2 else "1.0"
-        send_mpv_cmd(["set_property", "speed", float(s)])
-        print(json.dumps({"success": True}))
+        try:
+            speed_val = float(s)
+        except ValueError:
+            print(json.dumps({"success": False, "error": "invalid numeric argument"}))
+        else:
+            send_mpv_cmd(["set_property", "speed", speed_val])
+            print(json.dumps({"success": True}))
     elif action == "set_eq":
         preset = sys.argv[2] if len(sys.argv) > 2 else "Flat"
         print(json.dumps(set_eq(preset)))
@@ -1795,21 +1855,34 @@ if __name__ == "__main__":
     elif action == "play_playlist":
         name = sys.argv[2] if len(sys.argv) > 2 else ""
         idx = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3].isdigit() else 0
-        print(json.dumps(play_playlist_action(name, idx)))
+        url = sys.argv[4] if len(sys.argv) > 4 else None
+        print(json.dumps(play_playlist_action(name, idx, url)))
     elif action == "seek":
-        sec = float(sys.argv[2]) if len(sys.argv) > 2 else 0.0
-        send_mpv_cmd(["seek", sec, "absolute"])
-        print(json.dumps({"success": True}))
+        try:
+            sec = float(sys.argv[2]) if len(sys.argv) > 2 else 0.0
+        except ValueError:
+            print(json.dumps({"success": False, "error": "invalid numeric argument"}))
+        else:
+            send_mpv_cmd(["seek", sec, "absolute"])
+            print(json.dumps({"success": True}))
     elif action in ["volume", "volume_pct"]:
-        pct = float(sys.argv[2]) if len(sys.argv) > 2 else 80.0
-        send_mpv_cmd(["set_property", "volume", pct])
-        print(json.dumps({"success": True}))
+        try:
+            pct = float(sys.argv[2]) if len(sys.argv) > 2 else 80.0
+        except ValueError:
+            print(json.dumps({"success": False, "error": "invalid numeric argument"}))
+        else:
+            send_mpv_cmd(["set_property", "volume", pct])
+            print(json.dumps({"success": True}))
     elif action == "play_item":
         url = sys.argv[2] if len(sys.argv) > 2 else ""
         t = sys.argv[3] if len(sys.argv) > 3 else ""
         a = sys.argv[4] if len(sys.argv) > 4 else ""
-        pos = int(sys.argv[5]) if len(sys.argv) > 5 else 0
-        print(json.dumps(play_item(url, t, a, pos=pos)))
+        try:
+            pos = int(sys.argv[5]) if len(sys.argv) > 5 else 0
+        except ValueError:
+            print(json.dumps({"success": False, "error": "invalid numeric argument"}))
+        else:
+            print(json.dumps(play_item(url, t, a, pos=pos)))
     elif action in ["queue", "queue_add"]:
         url = sys.argv[2] if len(sys.argv) > 2 else ""
         t = sys.argv[3] if len(sys.argv) > 3 else ""
@@ -1823,9 +1896,9 @@ if __name__ == "__main__":
     elif action == "queue_clear":
         print(json.dumps(clear_queue()))
     elif action == "start_daemon":
-        start_mpv_daemon()
+        mpv_ok = start_mpv_daemon()
         start_spectrum_daemon()
-        print(json.dumps({"success": True, "running": is_mpv_running()}))
+        print(json.dumps({"success": mpv_ok, "running": is_mpv_running()}))
     elif action == "stop_daemon":
         print(json.dumps(stop_daemon()))
     elif action == "lyrics":

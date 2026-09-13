@@ -58,6 +58,14 @@ Panel {
   property bool isSearching: false
   property string searchQuery: ""
   property string loadingVid: ""
+  property double loadingSince: 0
+  property string lastError: ""
+  property string _lastCmd: ""
+  property double _lastCmdAt: 0
+  property bool _refreshPending: false
+  property bool _stopping: false
+  property string _pendingVis: ""
+  property string _lastSpec: ""
   property string selectedTab: "history"
   property string urlInputText: ""
   property string visMode: "siriwave"
@@ -127,7 +135,7 @@ Panel {
       loadHistory()
       loadPlaylists()
       loadQueue()
-      startSpectrum()
+      if (root.opened) startSpectrum()
     })
   }
 
@@ -139,7 +147,7 @@ Panel {
       loadHistory()
       loadPlaylists()
       loadQueue()
-      startSpectrum()
+      if (root.opened) startSpectrum()
       if (root.opened) setCenterHoverRevealSuppressed(true)
     })
   }
@@ -170,18 +178,25 @@ Panel {
 
   // ---- Actions
   function refresh() {
-    if (!statusProc.running) statusProc.running = true
+    if (statusProc.running) { root._refreshPending = true; return }
+    statusProc.running = true
   }
 
   function togglePlayback() {
+    root.loadingVid = root.currentUrl || "pending"
+    root.loadingSince = Date.now()
     root.playbackState = (root.playbackState === "playing") ? "paused" : "playing"
     runCmd(["toggle"])
   }
   function play() {
+    root.loadingVid = root.currentUrl || "pending"
+    root.loadingSince = Date.now()
     root.playbackState = "playing"
     runCmd(["play"])
   }
   function pause() {
+    root.loadingVid = root.currentUrl || "pending"
+    root.loadingSince = Date.now()
     root.playbackState = "paused"
     runCmd(["pause"])
   }
@@ -190,6 +205,8 @@ Panel {
     runCmd(["stop"])
   }
   function nextTrack() {
+    root.loadingVid = root.currentUrl || "pending"
+    root.loadingSince = Date.now()
     if (root.activePlaylist && root.currentPlaylistName === root.activePlaylist.name && root.currentPlaylistIndex >= 0) {
       var nextIdx = root.currentPlaylistIndex + 1
       if (nextIdx < root.activePlaylist.tracks.length) {
@@ -215,6 +232,8 @@ Panel {
   }
 
   function prevTrack() {
+    root.loadingVid = root.currentUrl || "pending"
+    root.loadingSince = Date.now()
     if (root.curSecs <= 3.0 && root.activePlaylist && root.currentPlaylistName === root.activePlaylist.name && root.currentPlaylistIndex > 0) {
       var prevIdx = root.currentPlaylistIndex - 1
       root.currentPlaylistIndex = prevIdx
@@ -267,6 +286,8 @@ Panel {
   function setVisMode(mode) {
     if (!mode) return
     root.visMode = mode
+    root._pendingVis = mode
+    pendingVisTimer.restart()
     runCmd(["set_vis_mode", mode])
     if (playerComp) playerComp.requestPaint()
   }
@@ -309,7 +330,7 @@ Panel {
           title: h.title || "Track",
           artist: h.artist || "",
           duration: h.duration_secs ? (Math.floor(h.duration_secs / 60) + ":" + (h.duration_secs % 60 < 10 ? "0" + (h.duration_secs % 60) : (h.duration_secs % 60))) : "",
-          url: h.path || (h.title + " " + h.artist)
+          url: h.path || h.url || ""
         })
       }
       root.activePlaylist = { name: "Recently Played", tracks: recents, system: true }
@@ -325,6 +346,7 @@ Panel {
   function doResume() {
     root.playbackState = "playing"
     root.loadingVid = root.resumeInfo ? root.resumeInfo.url : ""
+    root.loadingSince = Date.now()
     root.resumeVisible = false
     runCmd(["resume"])
   }
@@ -333,6 +355,7 @@ Panel {
     if (!url || !url.trim()) return
     var u = url.trim()
     root.loadingVid = u
+    root.loadingSince = Date.now()
     root.currentTrack = title || "Buffering..."
     root.currentArtist = artist || ""
     root.playbackState = "buffering"
@@ -342,7 +365,7 @@ Panel {
 
   function queueUrl(url, title, artist) {
     if (!url || !url.trim()) return
-    runCmd(["queue", url.trim(), title || "", artist || ""])
+    runQueueCmd(["queue", url.trim(), title || "", artist || ""])
     root.urlInputText = ""
     loadQueue()
     loadHistory()
@@ -353,12 +376,12 @@ Panel {
   }
 
   function clearQueue() {
-    runCmd(["queue_clear"])
+    runQueueCmd(["queue_clear"])
     loadQueue()
   }
 
   function removeFromQueue(idx) {
-    runCmd(["queue_remove", String(idx)])
+    runQueueCmd(["queue_remove", String(idx)])
     loadQueue()
   }
 
@@ -400,18 +423,25 @@ Panel {
     root.currentPlaylistName = pl.name || "Playlist"
     root.currentPlaylistIndex = idx
     var t = pl.tracks[idx]
-    if (t) {
-      root.loadingVid = t.url || (t.title + " " + t.artist)
-      root.currentTrack = t.title || "Buffering..."
-      root.currentArtist = t.artist || ""
-      root.playbackState = "buffering"
+    if (!t) return
+    var u = (t.url || t.path || "").trim()
+    root.currentTrack = t.title || "Buffering..."
+    root.currentArtist = t.artist || ""
+    root.playbackState = "buffering"
+    if (u) {
+      root.loadingVid = u
+      root.loadingSince = Date.now()
+      runCmd(["play_item", u, t.title || "", t.artist || ""])
+    } else if ((t.title || "").trim() || (t.artist || "").trim()) {
+      runCmd(["play_playlist", pl.name || "Playlist", String(idx)])
     }
-    runCmd(["play_playlist", pl.name || "Playlist", String(idx)])
     loadQueue()
     loadHistory()
   }
 
   function stopDaemon() {
+    root._stopping = true
+    stoppingTimer.restart()
     runCmd(["stop_daemon"])
     root.isRunning = false
     root.playbackState = "stopped"
@@ -426,9 +456,22 @@ Panel {
   }
 
   function runCmd(args) {
+    if (["play_item", "play_playlist", "toggle", "play", "next", "prev"].indexOf(args[0]) !== -1) {
+      var key = args.join("")
+      var now = Date.now()
+      if (key === root._lastCmd && now - root._lastCmdAt < 400) return
+      root._lastCmd = key
+      root._lastCmdAt = now
+    }
     actionProc.running = false
     actionProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", "")].concat(args)
     actionProc.running = true
+  }
+
+  function runQueueCmd(args) {
+    queueMutProc.running = false
+    queueMutProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", "")].concat(args)
+    queueMutProc.running = true
   }
 
   // ---- Processes
@@ -440,9 +483,13 @@ Panel {
       onStreamFinished: {
         try {
           var data = JSON.parse(text || "{}")
+          if (!root._stopping) {
           root.isRunning = data.running === true
-          if (!(root.loadingVid !== "" && data.state === "stopped" && actionProc.running))
-            root.playbackState = data.state || "stopped"
+          var _st = data.state || "stopped"
+          if (_st === "playing" || _st === "paused") root.loadingVid = ""
+          else if (_st === "stopped" && root.loadingVid !== "" && (Date.now() - root.loadingSince > 15000)) root.loadingVid = ""
+          if (!(root.loadingVid !== "" && _st === "stopped" && actionProc.running))
+            root.playbackState = _st
           var newTrack = String(data.track || "Omaramp")
           var newUrl = String(data.url || "")
           var trackChanged = (newTrack !== root.currentTrack) || (newUrl !== root.currentUrl)
@@ -471,16 +518,19 @@ Panel {
           root.queueCount = (data.queue_count !== undefined) ? Number(data.queue_count) : 0
           root.eqText = String(data.eq || "Custom")
           if (data.audio_fx) root.audioFx = data.audio_fx
-          if (data.vis_mode && String(data.vis_mode) !== root.visMode && !root.visPickerOpen) {
+          if (data.vis_mode && String(data.vis_mode) !== root.visMode && !root.visPickerOpen && root._pendingVis === "") {
             root.visMode = String(data.vis_mode)
           }
+          if (root._pendingVis !== "" && data.vis_mode && String(data.vis_mode) === root._pendingVis) root._pendingVis = ""
           if (data.resume && root.playbackState === "stopped") {
             root.resumeInfo = data.resume
             root.resumeVisible = true
           } else {
             root.resumeVisible = false
           }
+          }
         } catch (e) {}
+        if (root._refreshPending) { root._refreshPending = false; root.refresh() }
       }
     }
   }
@@ -556,13 +606,24 @@ Panel {
 
   Process {
     id: actionProc
-    onExited: function() {
-      root.loadingVid = ""
+    stdout: StdioCollector {
+      id: actionOut
+      waitForEnd: true
+    }
+    onExited: function(exitCode, exitStatus) {
+      if (exitCode !== 0 || exitStatus !== 0) root.lastError = (actionOut.text || "Command failed").substring(0, 300)
       root.refresh()
       if (root.opened) loadHistory()
       // On cold start (first play after reboot) mpv needs 1-4s to boot + buffer.
       // Poll again at 1s and 3.5s so the UI catches the playing state.
       coldStartTimer.restart()
+    }
+  }
+
+  Process {
+    id: queueMutProc
+    onExited: function() {
+      loadQueue()
     }
   }
 
@@ -581,12 +642,38 @@ Panel {
     onTriggered: root.refresh()
   }
 
+  Timer {
+    id: stoppingTimer
+    interval: 2000; repeat: false; running: false
+    onTriggered: root._stopping = false
+  }
+
+  Timer {
+    id: pendingVisTimer
+    interval: 2000; repeat: false; running: false
+    onTriggered: root._pendingVis = ""
+  }
+
   // Silently pre-warms the mpv daemon when the panel opens.
   // Runs start_daemon which is a no-op if mpv is already running.
   Process {
     id: warmupProc
     command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "start_daemon"]
-    onExited: root.refresh()
+    stdout: StdioCollector {
+      id: warmupOut
+      waitForEnd: true
+    }
+    onExited: function(exitCode, exitStatus) {
+      if (exitCode !== 0 || exitStatus !== 0) {
+        root.lastError = (warmupOut.text || "Daemon warmup failed").substring(0, 300)
+      } else {
+        try {
+          var res = JSON.parse(warmupOut.text || "{}")
+          if (res && res.success === false) root.lastError = String(res.error || "Daemon warmup failed").substring(0, 300)
+        } catch (e) {}
+      }
+      root.refresh()
+    }
   }
 
   Process {
@@ -634,6 +721,8 @@ Panel {
     var content = raw
     if (!content && specFile) { try { content = specFile.text() } catch (e) {} }
     if (!content) return
+    if (content === root._lastSpec) return
+    root._lastSpec = content
 
     try {
       var data = JSON.parse(content)
@@ -656,7 +745,7 @@ Panel {
 
   Timer {
     id: visTimer
-    interval: 35; running: root.opened; repeat: true
+    interval: 66; running: root.opened; repeat: true
     onTriggered: {
       if (root.isPlaying) {
         specFile.reload()

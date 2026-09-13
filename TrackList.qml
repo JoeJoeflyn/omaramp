@@ -27,12 +27,12 @@ Column {
       if (curM && itmM && curM[1] === itmM[1]) return true
     }
     
-    // Fallback title / artist matching
+    // Fallback exact title + artist matching
     var curT = p.currentTrack ? p.currentTrack.trim().toLowerCase() : ""
     var itmT = itemTitle ? itemTitle.trim().toLowerCase() : ""
-    if (curT !== "" && itmT !== "") {
-      if (curT === itmT || curT.indexOf(itmT) !== -1 || itmT.indexOf(curT) !== -1) return true
-    }
+    var curA = p.currentArtist ? p.currentArtist.trim().toLowerCase() : ""
+    var itmA = itemArtist ? itemArtist.trim().toLowerCase() : ""
+    if (curT !== "" && itmT !== "" && curT === itmT && curA === itmA) return true
     return false
   }
 

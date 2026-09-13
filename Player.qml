@@ -59,6 +59,7 @@ Item {
   property string lyricsTrack: ""
   property string lyricsArtist: ""
   property string lyricsUrl: ""
+  property string _lyricsFor: ""
 
   property real beatDropPulse: 0.0
   property real _bassAvg: 0.0
@@ -95,6 +96,7 @@ Item {
     lyricsTrack = p.currentTrack
     lyricsArtist = p.currentArtist
     lyricsUrl = p.currentUrl
+    _lyricsFor = p.currentTrack + "\n" + p.currentArtist + "\n" + p.currentUrl
     lyricsProc.running = false
     lyricsProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "lyrics", p.currentTrack, p.currentArtist, p.currentUrl]
     lyricsProc.running = true
@@ -193,6 +195,11 @@ Item {
   })
 
   function requestPaint() { if (visCanvas) visCanvas.requestPaint() }
+
+  Connections {
+    target: p
+    function onVisModeChanged() { p._visState = ({}) }
+  }
 
   BorderSurface {
     id: hud
@@ -744,6 +751,7 @@ Item {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
+        if (root._lyricsFor !== (p.currentTrack + "\n" + p.currentArtist + "\n" + p.currentUrl)) return
         try {
           var d = JSON.parse(text || "{}")
           if (d.synced) root.parseLyrics(d.synced)

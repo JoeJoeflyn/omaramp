@@ -26,7 +26,7 @@ Inspired by Winamp & [cliamp](https://github.com/brianstrauch/cliamp).
 - **Synced Lyrics**: Live word-by-word synced lyrics powered by lrclib.net.
 - **Streaming & YouTube Integration**:
   - Instant YouTube track search with auto-thumbnail prefetching.
-  - Zero-disk FIFO streaming audio playback over secure private user runtime directory.
+  - Direct-stream audio playback with smart URL caching and prefetching.
   - Direct Spotify track links (`open.spotify.com/track/...`) and playlist/album importer.
 - **Queue Manager (Up Next)**: Interactive queue tab with reordering, queue count badges, and auto-play next.
 - **Full Transport Deck**: Play/Pause, Next, Prev, Stop, Shuffle, Repeat, Volume slider, and Speed controls (0.5x–2.0x).
