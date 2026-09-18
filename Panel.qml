@@ -796,7 +796,17 @@ Panel {
         if (keyCatcher.parent && keyCatcher.parent.parent) {
           var card = keyCatcher.parent.parent
           card.x = Qt.binding(function() {
-            var sw = panel.screen ? panel.screen.width : (panel.anchorItem && panel.anchorItem.Window.window ? panel.anchorItem.Window.window.width : 1920)
+            // Prefer the active screen of the KeyboardPanel itself; fall back
+            // to the anchor window's screen and finally to a sane default.
+            // Reading window.width on the bar's PanelWindow can otherwise
+            // return the virtual desktop width (multi-monitor), which parks
+            // the card off-screen and leaves the dismiss area unreachable.
+            var sw = 0
+            if (panel.screen) sw = panel.screen.width
+            else if (panel.anchorWindow && panel.anchorWindow.screen) sw = panel.anchorWindow.screen.width
+            else if (panel.anchorItem && panel.anchorItem.Window && panel.anchorItem.Window.window && panel.anchorItem.Window.window.screen)
+              sw = panel.anchorItem.Window.window.screen.width
+            if (!sw) sw = 1920
             return sw - panel.contentWidth - panel.margin
           })
         }
