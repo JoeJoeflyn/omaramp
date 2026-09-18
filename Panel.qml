@@ -428,13 +428,12 @@ Panel {
     root.currentTrack = t.title || "Buffering..."
     root.currentArtist = t.artist || ""
     root.playbackState = "buffering"
-    if (u) {
-      root.loadingVid = u
-      root.loadingSince = Date.now()
-      runCmd(["play_item", u, t.title || "", t.artist || ""])
-    } else if ((t.title || "").trim() || (t.artist || "").trim()) {
-      runCmd(["play_playlist", pl.name || "Playlist", String(idx)])
-    }
+    root.loadingVid = u || "pending"
+    root.loadingSince = Date.now()
+    // Always go through play_playlist so the Python side saves the
+    // playback context (tracks + index). Otherwise next/prev have no
+    // context to advance through and silently fall back to "No next track".
+    runCmd(["play_playlist", pl.name || "Playlist", String(idx)])
     loadQueue()
     loadHistory()
   }
