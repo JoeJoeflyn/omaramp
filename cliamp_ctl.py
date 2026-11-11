@@ -1725,6 +1725,53 @@ def queue_item(url, title=None, artist=None):
         return {"success": False, "error": err}
     return {"success": True}
 
+AUDIO_EXTS = ("mp3", "flac", "ogg", "oga", "opus", "wav", "m4a", "aac", "wma", "aiff", "alac", "ape", "mka", "webm")
+
+def expand_local_paths(paths):
+    """Files are kept as given; folders are scanned recursively for audio files."""
+    files = []
+    for p in paths:
+        p = os.path.expanduser(p)
+        if os.path.isfile(p):
+            files.append(p)
+        elif os.path.isdir(p):
+            for dirpath, dirs, names in os.walk(p):
+                dirs.sort()
+                files.extend(os.path.join(dirpath, n) for n in sorted(names)
+                             if os.path.splitext(n)[1][1:].lower() in AUDIO_EXTS)
+    return files
+
+def add_local(paths):
+    """Play the first local track and queue the rest."""
+    files = expand_local_paths(paths)
+    if not files:
+        return {"success": False, "error": "No audio files found"}
+    res = play_item(files[0])
+    if not res.get("success") or len(files) == 1:
+        return res
+    # Append directly: add_to_queue() would replace playback while mpv is still loading.
+    lock_fd = os.open(STATE_LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        q = read_queue()
+        q.extend({"url": f, "title": os.path.splitext(os.path.basename(f))[0], "artist": "", "thumb": ""}
+                 for f in files[1:])
+        save_queue(q)
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
+    return {"success": True, "count": len(files)}
+
+def pick_local():
+    """Ask the desktop file chooser for music files, then add them."""
+    try:
+        out = subprocess.run(["omarchy-file-select", "--title", "Omaramp: add music", "--multiple",
+                              "--extensions", " ".join(AUDIO_EXTS)], capture_output=True, text=True).stdout
+    except OSError as e:
+        return {"success": False, "error": str(e)}
+    paths = [l for l in out.splitlines() if l.strip()]
+    return add_local(paths) if paths else {"success": True, "count": 0}
+
 def stop_daemon():
     terminate_tracked_pid(STREAM_PID_FILE, expected_signature=["yt-dlp", STREAM_FIFO])
     terminate_tracked_pid(SPECTRUM_PID_FILE, expected_signature="spectrum.py")
@@ -1910,6 +1957,10 @@ if __name__ == "__main__":
             print(json.dumps({"success": False, "error": "invalid numeric argument"}))
         else:
             print(json.dumps(play_item(url, t, a, pos=pos)))
+    elif action == "add_local":
+        print(json.dumps(add_local(sys.argv[2:])))
+    elif action == "pick_local":
+        print(json.dumps(pick_local()))
     elif action in ["queue", "queue_add"]:
         url = sys.argv[2] if len(sys.argv) > 2 else ""
         t = sys.argv[3] if len(sys.argv) > 3 else ""

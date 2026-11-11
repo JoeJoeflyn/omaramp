@@ -43,7 +43,7 @@ Column {
 
     BorderSurface {
       id: searchBox
-      width: parent.width - Style.space(36)
+      width: parent.width - Style.space(68)
       implicitHeight: Style.space(26)
       radius: Style.cornerRadius
       color: Color.popups.background
@@ -121,6 +121,13 @@ Column {
       foreground: p.foreground; hoverColor: Color.accent; fontFamily: p.fontFamily
       enabled: p.urlInputText.trim().length > 0 && !p.isSearching
       onClicked: p.searchTracks(p.urlInputText)
+    }
+
+    PanelActionButton {
+      iconText: "\uf07c"
+      tooltipText: "Open local music (or drop files on the bar icon)"
+      foreground: p.foreground; hoverColor: Color.accent; fontFamily: p.fontFamily
+      onClicked: p.pickLocalFiles()
     }
   }
 

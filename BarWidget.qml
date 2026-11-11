@@ -213,6 +213,37 @@ BarWidget {
     }
   }
 
+  function addLocalFiles(paths) {
+    ensurePanel()
+    if (panelLoader.item && panelLoader.item.addLocalFiles) panelLoader.item.addLocalFiles(paths)
+    else Qt.callLater(function() { if (panelLoader.item && panelLoader.item.addLocalFiles) panelLoader.item.addLocalFiles(paths) })
+  }
+
+  // Drop files/folders from a file manager onto the bar icon. The panel can't
+  // be a drop target: it closes as soon as another window is clicked.
+  DropArea {
+    id: dropArea
+    anchors.fill: parent
+    keys: ["text/uri-list"]
+    onDropped: function(drop) {
+      var paths = Array.from(drop.urls, String)
+        .filter(function(u) { return u.indexOf("file://") === 0 })
+        .map(function(u) { return decodeURIComponent(u.substring(7)) })
+      if (paths.length === 0) return
+      drop.acceptProposedAction()
+      root.addLocalFiles(paths)
+    }
+  }
+
+  Rectangle {
+    anchors.fill: parent
+    visible: dropArea.containsDrag
+    color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
+    border.color: Color.accent
+    border.width: 1
+    radius: Style.cornerRadius
+  }
+
   WheelHandler {
     target: button
     onWheel: function(event) {
