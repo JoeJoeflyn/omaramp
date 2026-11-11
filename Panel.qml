@@ -469,6 +469,24 @@ Panel {
     actionProc.running = true
   }
 
+  // Local files (dropped on the bar icon or picked in the file chooser).
+  // cliamp_ctl.py plays the first track and queues the rest.
+  function addLocalFiles(paths) {
+    if (paths && paths.length > 0) runLocalCmd(["add_local"].concat(paths))
+  }
+
+  // The panel is a full-screen overlay, so close it before the chooser opens.
+  function pickLocalFiles() {
+    root.close()
+    runLocalCmd(["pick_local"])
+  }
+
+  function runLocalCmd(args) {
+    localProc.running = false
+    localProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", "")].concat(args)
+    localProc.running = true
+  }
+
   function runQueueCmd(args) {
     queueMutProc.running = false
     queueMutProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", "")].concat(args)
@@ -618,6 +636,24 @@ Panel {
       // On cold start (first play after reboot) mpv needs 1-4s to boot + buffer.
       // Poll again at 1s and 3.5s so the UI catches the playing state.
       coldStartTimer.restart()
+    }
+  }
+
+  Process {
+    id: localProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var res = JSON.parse(text || "{}")
+          if (res.success === false) root.lastError = String(res.error || "Could not add local files")
+          else if (res.count > 1) root.selectedTab = "queue"
+        } catch (e) {}
+        root.refresh()
+        loadHistory()
+        loadQueue()
+        coldStartTimer.restart()
+      }
     }
   }
 
@@ -775,6 +811,8 @@ Panel {
     function next() { root.nextTrack() }
     function prev() { root.prevTrack() }
     function playUrl(url: string) { root.playUrl(url) }
+    function openFiles() { root.pickLocalFiles() }
+    function addFile(path: string) { root.addLocalFiles([path]) }
   }
 
   // ---- Popup Window
