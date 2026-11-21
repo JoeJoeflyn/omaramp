@@ -98,6 +98,8 @@ Panel {
   readonly property var _ctl: [python, Qt.resolvedUrl("ctl.py").toString().replace("file://", "")]
   property var _quickQ: []
   property var _queueQ: []
+  property var _localQ: []
+  property bool chooserPending: false
 
   onIsPlayingChanged: resetSpectrum()
   onCurrentUrlChanged: resetSpectrum()
@@ -529,6 +531,17 @@ Panel {
     actionProc.running = true
   }
 
+  function addLocalFiles(paths) {
+    if (paths.length) _push(root._localQ, localProc, ["add_local"].concat(paths), false)
+  }
+
+  function pickLocalFiles() {
+    if (root.chooserPending) return
+    root.chooserPending = true
+    if (root.opened) root.close() // Don't cover the desktop chooser.
+    _push(root._localQ, localProc, ["pick_local"], false)
+  }
+
   // Quick settings (volume, seek, EQ...) and queue edits each have their own process and run one
   // after another, so they never kill a song that is still loading, or each other.
   function runQuick(args) { _push(root._quickQ, quickProc, args, true) }
@@ -725,6 +738,26 @@ Panel {
       // On cold start (first play after reboot) mpv needs 1-4s to boot + buffer.
       // Poll again at 1s and 3.5s so the UI catches the playing state.
       coldStartTimer.restart()
+    }
+  }
+
+  Process {
+    id: localProc
+    stdout: StdioCollector { id: localOut; waitForEnd: true }
+    onExited: function(exitCode, exitStatus) {
+      if (command[root._ctl.length] === "pick_local") root.chooserPending = false
+      var res = null
+      try { res = JSON.parse(localOut.text) } catch (e) {}
+      if (exitCode !== 0 || exitStatus !== 0 || !res || !res.success) {
+        if (!root.opened) root.openFromHotkey()
+        root.showError((res && res.error) || "Could not add local files")
+      } else if (res.count > 0) {
+        if (res.count > 1) root.selectedTab = "queue"
+        root.refresh()
+        loadHistory()
+        loadQueue()
+      }
+      root._runNext(root._localQ, localProc)
     }
   }
 

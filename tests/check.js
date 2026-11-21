@@ -149,6 +149,14 @@ assert(run('mosaic', 1).state.mosaicCells.every(c => c.threshold >= 0.04), 'mosa
   receive(frame(now)); assert.strictEqual(root.visFrame, 2)
 }
 
+{ // Only local file URIs are drops; decode exactly once and skip malformed entries individually.
+  const src = read('BarWidget.qml').match(/function droppedPaths\([\s\S]*?\n  \}/)[0]
+  const paths = new Function(src + '; return droppedPaths')()
+  assert.deepStrictEqual(paths(['file:///music/bad%FF', 'file:///music/%00', 'https://example.com/file.mp3',
+    'file://otherhost/remote.mp3', 'file:///music/%E2%99%AB%20%231%25.wav', 'file://localhost/music/%2520.flac']),
+    ['/music/♫ #1%.wav', '/music/%20.flac'])
+}
+
 // 3. which row is "the one playing" (the function lives in TrackList.qml)
 const fn = read('TrackList.qml').match(/function isTrackCurrent\([\s\S]*?\n  \}\n/)[0]
 const current = (p, ...item) => new Function('p', fn + '; return isTrackCurrent')(p)(...item)

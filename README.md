@@ -127,6 +127,12 @@ omarchy-shell omaramp stop
 omarchy-shell omaramp next
 omarchy-shell omaramp prev
 
+# Pick local songs, or play a file/folder without opening the panel first.
+# You can also drop files/folders on the bar icon or click the folder next to Search.
+# The first audio file plays; the rest are appended to Up Next.
+omarchy-shell omaramp openFiles
+omarchy-shell omaramp addFile "$HOME/Music/Album"
+
 # Play a stream URL or YouTube link
 omarchy-shell omaramp playUrl "https://www.youtube.com/watch?v=..."
 ```

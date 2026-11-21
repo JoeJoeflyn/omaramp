@@ -228,4 +228,32 @@ dead.close()                       # a socket file nobody listens on: an mpv tha
 assert c.get_status(allow_advance=False)["running"] is False and not os.path.exists(c.SOCK_PATH)
 assert c.get_mpv_properties(["pause"]) is None
 
-print("ok: playback, stream recovery, TLS, lyrics cache, stereo spectrum and status poll")
+# 10. Direct drops and directory drops use the same audio filter and queue order.
+from pathlib import Path
+
+with tempfile.TemporaryDirectory() as folder:
+    root = Path(folder)
+    sub = root / "album"
+    sub.mkdir()
+    for name in ["notes.txt", "song B.MP3", "song A.wav", "album/c.flac"]:
+        (root / name).touch()
+    first, second, third = [str(root / name) for name in ("song A.wav", "song B.MP3", "album/c.flac")]
+    with patch.object(c, "play_item", return_value={"success": True}) as play:
+        c.save_queue([{"url": "/already-queued"}])
+        assert not c.add_local([str(root / "notes.txt")])["success"]
+        play.assert_not_called()
+        assert c.add_local([str(root / "notes.txt"), folder]) == {"success": True, "count": 3}
+        play.assert_called_once_with(first)
+        assert [t["url"] for t in c.read_queue()] == ["/already-queued", second, third]
+        with patch.object(c.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout=second + "\n", stderr="")):
+            assert c.pick_local() == {"success": True, "count": 1}
+            play.assert_called_with(second)
+    with patch.object(c, "play_item") as play:
+        for code, expected in [(1, True), (2, False)]:
+            with patch.object(c.subprocess, "run", return_value=SimpleNamespace(returncode=code, stdout="", stderr="portal unavailable")):
+                result = c.pick_local()
+                assert result["success"] is expected
+                if not expected: assert "portal unavailable" in result["error"]
+        play.assert_not_called()
+
+print("ok: playback, stream recovery, TLS, lyrics cache, stereo spectrum, status poll and local files")

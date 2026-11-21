@@ -124,6 +124,8 @@ BarWidget {
     function next(): void { root.nextTrack() }
     function prev(): void { root.withPanel(p => p.prevTrack()) }
     function playUrl(url: string): void { root.withPanel(p => p.playUrl(url)) }
+    function openFiles(): void { root.withPanel(p => p.pickLocalFiles()) }
+    function addFile(path: string): void { root.addLocalFiles([path]) }
   }
 
   // The panel holds the poller that moves on to the next track. A shell or plugin reload
@@ -254,6 +256,46 @@ BarWidget {
       else if (b === Qt.MiddleButton) root.togglePlayback()
       else root.togglePanel()
     }
+  }
+
+  function addLocalFiles(paths) {
+    withPanel(p => p.addLocalFiles(paths))
+  }
+
+  function droppedPaths(urls) {
+    var paths = []
+    for (var i = 0; i < urls.length; i++) {
+      var match = /^file:\/\/(?:localhost)?(\/[^?#]*)(?:[?#].*)?$/i.exec(String(urls[i]))
+      if (!match) continue
+      try {
+        var path = decodeURIComponent(match[1])
+        if (path.indexOf("\u0000") === -1) paths.push(path)
+      } catch (e) { /* An invalid URI must not discard other files in the drop. */ }
+    }
+    return paths
+  }
+
+  // Drop files/folders from a file manager onto the bar icon. The panel can't
+  // be a drop target: it closes as soon as another window is clicked.
+  DropArea {
+    id: dropArea
+    anchors.fill: parent
+    keys: ["text/uri-list"]
+    onDropped: function(drop) {
+      var paths = root.droppedPaths(drop.urls)
+      if (paths.length === 0) return
+      drop.acceptProposedAction()
+      root.addLocalFiles(paths)
+    }
+  }
+
+  Rectangle {
+    anchors.fill: parent
+    visible: dropArea.containsDrag
+    color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
+    border.color: Color.accent
+    border.width: 1
+    radius: Style.cornerRadius
   }
 
   WheelHandler {
