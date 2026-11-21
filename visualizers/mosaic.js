@@ -16,11 +16,12 @@ function render(ctx, d) {
     for (var r = 0; r < numRows; r++) {
       var baseBand = numRows > 1 ? Math.floor((numRows - 1 - r) * (count - 1) / (numRows - 1)) : Math.floor(count / 2)
       for (var c = 0; c < numTiles; c++) {
-        rngVal = (rngVal * 1664525 + 1013904223) & 0xFFFFFFFF
-        var jitter = ((rngVal >> 16) % 5) - 2
+        // >>> keeps the state unsigned; with & and >> half the tiles got a negative threshold and never went dark
+        rngVal = (rngVal * 1664525 + 1013904223) >>> 0
+        var jitter = ((rngVal >>> 16) % 5) - 2
         var band = Math.max(0, Math.min(count - 1, baseBand + jitter))
-        rngVal = (rngVal * 1664525 + 1013904223) & 0xFFFFFFFF
-        var th = 0.04 + ((rngVal >> 16) % 1000) / 1000.0 * 0.74
+        rngVal = (rngVal * 1664525 + 1013904223) >>> 0
+        var th = 0.04 + ((rngVal >>> 16) % 1000) / 1000.0 * 0.74
         s.mosaicCells[r * numTiles + c] = { bandIdx: band, threshold: th, value: 0 }
       }
     }

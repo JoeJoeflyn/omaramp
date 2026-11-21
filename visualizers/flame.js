@@ -20,8 +20,9 @@ function render(ctx, d) {
     var bi = Math.floor(pos)
     var frac = pos - bi
     var src = d.playing ? ((bands[bi] || 0) * (1 - frac) + (bands[Math.min(bi+1, count-1)] || 0) * frac) : 0
-    rngVal = (rngVal * 1664525 + 1013904223) & 0xFFFFFFFF
-    var sparkle = d.playing && src > 0.05 ? (((rngVal >> 16) % 100) / 100.0 * 0.20) : 0
+    // >>> keeps the state unsigned; with & and >> half the draws were negative and the fire leaned sideways
+    rngVal = (rngVal * 1664525 + 1013904223) >>> 0
+    var sparkle = d.playing && src > 0.05 ? (((rngVal >>> 16) % 100) / 100.0 * 0.20) : 0
     var base = d.playing ? (src * 1.35 + sparkle) : 0
     if (base > 1.2) base = 1.2
     heat[fx] = base
@@ -32,9 +33,9 @@ function render(ctx, d) {
     var hf = fy / Math.max(1, fRows - 1)
     var decayBase = 0.010 + 0.028 * hf
     for (var fx2 = 0; fx2 < fCols; fx2++) {
-      rngVal = (rngVal * 1664525 + 1013904223) & 0xFFFFFFFF
-      var offset = ((rngVal >> 16) % 3) - 1
-      var decayJitter = ((rngVal >> 24) % 100) / 100.0 * 0.018
+      rngVal = (rngVal * 1664525 + 1013904223) >>> 0
+      var offset = ((rngVal >>> 16) % 3) - 1
+      var decayJitter = ((rngVal >>> 24) % 100) / 100.0 * 0.018
       var sourceX = Math.max(0, Math.min(fCols - 1, fx2 + offset))
       var next = heat[(fy - 1) * fCols + sourceX] - decayBase - decayJitter
       heat[fy * fCols + fx2] = Math.max(0, next)

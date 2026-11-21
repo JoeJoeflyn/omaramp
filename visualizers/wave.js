@@ -26,14 +26,12 @@ function render(ctx, d) {
   ctx.beginPath()
 
   if (n > 1 && d.playing) {
-    var step = Math.max(1, Math.floor(w / n))
     var prevX = 0, prevY = midY
-    ctx.moveTo(0, midY)
 
     for (var i = 0; i < n; i++) {
       var x = (i / (n - 1)) * w
       var s = wave[i] || 0
-      var y = Math.max(2, Math.min(h - 3, midY - s * (h * 0.44)))
+      var y = midY - s * h * 0.44
       if (i === 0) {
         ctx.moveTo(x, y)
       } else {

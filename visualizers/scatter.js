@@ -6,7 +6,7 @@ function render(ctx, d) {
   var bands = d.bands, h = d.height, w = d.width, count = d.count, barW = d.barW, gap = d.gap, S = 2
   for (var sp = 0; sp < count; sp++) {
     var val = d.playing ? (bands[sp] || 0) : 0
-    var spX = sp * (barW + gap)
+    var spX = d.x0 + sp * (barW + gap)
     for (var sy = 0; sy < h; sy += S) {
       for (var sx = 0; sx < barW; sx += S) {
         var gravity = 0.5 + 0.5 * sy / h

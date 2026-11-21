@@ -8,22 +8,15 @@ function render(ctx, d) {
   var isPlaying = d.playing
   var beatDrop = d.beatDrop || 0
 
-  // 84 ultra-thin vertical bars
-  var numBars = 84
+  var layout = H.fitColumns(w, 84, 1.2, 1.4)
+  var numBars = layout.count, barW = layout.width
   var resampled = H.resampleBandsLinear(bands, numBars)
-
-  // Layout geometry
-  var margin = 6
-  var totalDrawW = w - margin * 2
-  var gap = 1.4
-  var barW = Math.max(1.2, (totalDrawW - (numBars - 1) * gap) / numBars)
-  var actualW = numBars * barW + (numBars - 1) * gap
-  var startX = margin + (totalDrawW - actualW) / 2.0
 
   // Baseline at 66% down
   var baselineY = h * 0.66
-  var maxTopH = baselineY - 4
-  var maxBotH = (h - baselineY) - 4
+  var maxTopH = baselineY * 0.90
+  var horizonGap = Math.min(1.2, h * 0.08)
+  var maxBotH = h - baselineY - horizonGap
 
   // Extract accent RGB
   var acc = d.accent
@@ -42,23 +35,23 @@ function render(ctx, d) {
 
   // Draw 84 fully-filled vibrant waveform bars
   for (var i = 0; i < numBars; i++) {
-    var bx = startX + i * (barW + gap)
+    var bx = layout.left + i * (barW + layout.gap)
 
     // Dynamic wave envelope
     var env = Math.sin((i / numBars) * Math.PI)
     var shapeVal = 0.16 + env * 0.48 + Math.sin(i * 0.55 + 0.2) * 0.12 + Math.sin(i * 1.3) * 0.08
     var energy = isPlaying ? (resampled[i] || 0) : 0.0
-    var kick = (i >= 3 && i <= 20) ? (beatDrop * 0.22) : 0.0
+    var kick = i / numBars < 0.25 ? beatDrop * 0.22 : 0.0
 
     // Top peak height
     var topNorm = Math.min(1.0, shapeVal * 0.38 + energy * 0.65 + kick)
-    var topH = Math.max(3.0, topNorm * maxTopH)
+    var topH = Math.min(maxTopH, Math.max(3.0, topNorm * maxTopH))
 
     // Bottom reflection height (~28% of top peak)
-    var botH = Math.max(1.5, topH * 0.28)
+    var botH = Math.min(maxBotH, Math.max(1.5, topH * 0.28))
 
     var topY = baselineY - topH
-    var botY = baselineY + 1.2 // 1.2px horizon slit
+    var botY = baselineY + horizonGap
     var r = Math.min(barW / 2.0, 0.8)
 
     // ── Full Vibrant Top Bar Gradient ──

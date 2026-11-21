@@ -52,7 +52,7 @@ function render(ctx, d) {
   ctx.beginPath()
   var maxWave = horizon * 0.85
   for (var rx = 0; rx < w; rx++) {
-    var bandF = rx / (w - 1) * (count - 1)
+    var bandF = rx / Math.max(1, w - 1) * (count - 1)
     var bi = Math.floor(bandF)
     var frac = bandF - bi
     var t = (1 - Math.cos(frac * Math.PI)) / 2

@@ -43,29 +43,22 @@ function render(ctx, d) {
   var beatDrop = d.beatDrop || 0
   var midY = h / 2.0
 
-  // 60 thermal intensity bars
-  var numBars = 60
+  var layout = H.fitColumns(w, 60, 2.0, 1.8)
+  var numBars = layout.count, barW = layout.width
   var resampled = H.resampleBandsLinear(bands, numBars)
 
-  var margin = 6
-  var totalDrawW = w - margin * 2
-  var gap = 1.8
-  var barW = Math.max(2.0, (totalDrawW - (numBars - 1) * gap) / numBars)
-  var actualW = numBars * barW + (numBars - 1) * gap
-  var startX = margin + (totalDrawW - actualW) / 2.0
-
   for (var i = 0; i < numBars; i++) {
-    var bx = startX + i * (barW + gap)
+    var bx = layout.left + i * (barW + layout.gap)
 
     // Track dynamic profile envelope
     var env = Math.sin((i / numBars) * Math.PI)
     var shapeVal = 0.16 + env * 0.48 + Math.sin(i * 0.75 + 0.3) * 0.14
     var energy = isPlaying ? (resampled[i] || 0) : 0.0
-    var kick = (i >= 2 && i <= 14) ? (beatDrop * 0.26) : 0.0
+    var kick = i / numBars < 0.25 ? beatDrop * 0.26 : 0.0
 
     // Thermal energy intensity (0.0 to 1.0)
     var intensity = Math.min(1.0, shapeVal * 0.38 + energy * 0.62 + kick)
-    var barH = Math.max(barW, intensity * (h * 0.86))
+    var barH = Math.min(h * 0.9, Math.max(barW, intensity * (h * 0.86)))
     var by = midY - (barH / 2.0)
     var r = Math.min(barW / 2.0, 1.5)
 

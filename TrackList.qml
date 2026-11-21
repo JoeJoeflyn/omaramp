@@ -26,7 +26,11 @@ Column {
       var itmM = itmU.match(/(?:v=|youtu\.be\/)([0-9A-Za-z_-]{11})/)
       if (curM && itmM && curM[1] === itmM[1]) return true
     }
-    
+
+    // Two real links or files that differ are different tracks, even under the same name
+    var ref = /^(https?:\/\/|\/)/
+    if (ref.test(curU) && ref.test(itmU)) return false
+
     // Fallback exact title + artist matching
     var curT = p.currentTrack ? p.currentTrack.trim().toLowerCase() : ""
     var itmT = itemTitle ? itemTitle.trim().toLowerCase() : ""
@@ -34,6 +38,13 @@ Column {
     var itmA = itemArtist ? itemArtist.trim().toLowerCase() : ""
     if (curT !== "" && itmT !== "" && curT === itmT && curA === itmA) return true
     return false
+  }
+
+  // A new tab or playlist starts at its top, not where the last one was scrolled to
+  Connections {
+    target: p
+    function onSelectedTabChanged() { listFlick.contentY = 0 }
+    function onActivePlaylistChanged() { listFlick.contentY = 0 }
   }
 
   // Search / URL Input Bar
@@ -243,6 +254,7 @@ Column {
 
   // Scrollable Track / Playlist Container
   Flickable {
+    id: listFlick
     width: parent.width
     implicitHeight: Style.space(168)
     contentWidth: width
@@ -272,7 +284,7 @@ Column {
       Item {
         visible: p.selectedTab === "search" && !p.isSearching && p.searchResults.length === 0 && p.searchQuery !== ""
         width: parent.width; implicitHeight: Style.space(40)
-        Text { anchors.centerIn: parent; text: "No tracks found for \"" + p.searchQuery + "\""; color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption }
+        Text { anchors.centerIn: parent; width: Math.min(implicitWidth, parent.width - Style.space(16)); elide: Text.ElideMiddle; textFormat: Text.PlainText; text: "No tracks found for \"" + p.searchQuery + "\""; color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption }
       }
 
       Repeater {
@@ -287,7 +299,7 @@ Column {
           MouseArea {
             id: sRowMouse
             anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-            onClicked: { if (modelData.url) p.playUrl(modelData.url, modelData.title, modelData.artist) }
+            onClicked: { if (modelData.url) p.playFromList("Search Results", index, modelData.url, modelData.title, modelData.artist) }
           }
 
           Row {
@@ -367,10 +379,47 @@ Column {
             // Duration
             Text {
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: modelData.duration || ""
               color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
             }
           }
+        }
+      }
+
+      // Ten more results for the same search
+      BorderSurface {
+        visible: p.selectedTab === "search" && !p.isSearching && p.searchHasMore
+        width: parent.width; implicitHeight: Style.space(26); radius: Style.cornerRadius
+        color: moreMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent"
+        borderSpec: Border.none()
+
+        Row {
+          anchors.centerIn: parent; spacing: Style.space(6)
+          Text {
+            visible: p.isLoadingMore
+            anchors.verticalCenter: parent.verticalCenter
+            text: "\uf110"; color: Color.accent; font.family: p.fontFamily; font.pixelSize: Style.font.caption
+            RotationAnimator on rotation { running: p.isLoadingMore; from: 0; to: 360; duration: 1000; loops: Animation.Infinite }
+          }
+          Text {
+            visible: !p.isLoadingMore
+            anchors.verticalCenter: parent.verticalCenter
+            text: "\uf078"; color: moreMouse.containsMouse ? Color.accent : p.dim
+            font.family: p.fontFamily; font.pixelSize: Style.font.caption * 0.8
+          }
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: p.isLoadingMore ? "Loading more..." : "Show more results"
+            color: moreMouse.containsMouse ? Color.accent : p.dim
+            font.family: p.fontFamily; font.pixelSize: Style.font.caption
+          }
+        }
+
+        MouseArea {
+          id: moreMouse
+          anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+          onClicked: p.searchMore()
         }
       }
 
@@ -389,7 +438,7 @@ Column {
           MouseArea {
             id: hRowMouse
             anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-            onClicked: { if (modelData.path) p.playUrl(modelData.path, modelData.title, modelData.artist) }
+            onClicked: { if (modelData.path) p.playFromList("Recently Played", index, modelData.path, modelData.title, modelData.artist) }
           }
 
           Row {
@@ -730,7 +779,11 @@ Column {
             model: (p.activePlaylist && p.activePlaylist.tracks) ? p.activePlaylist.tracks : []
             delegate: BorderSurface {
               id: plTrackRow
-              readonly property bool isCurrent: (p.activePlaylist && p.currentPlaylistName === p.activePlaylist.name && p.currentPlaylistIndex === index) || root.isTrackCurrent(modelData.url, modelData.title, modelData.artist)
+              // While this playlist is the one playing, only the row at the playing position counts,
+              // so a song that is in it twice lights up once. Recents can reorder, so they go by track alone.
+              readonly property bool isCurrent: root.isTrackCurrent(modelData.url, modelData.title, modelData.artist)
+                && (!p.activePlaylist || p.activePlaylist.system === true || p.currentPlaylistName !== p.activePlaylist.name
+                    || p.currentPlaylistIndex < 0 || p.currentPlaylistIndex === index)
               width: parent.width; implicitHeight: Style.space(28); radius: Style.cornerRadius
               color: isCurrent ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : (plTrackRowMouse.containsMouse ? Style.hoverFillFor(p.foreground, Color.accent) : "transparent")
               borderSpec: isCurrent ? Border.flat(Color.accent, 1) : Border.none
@@ -805,6 +858,7 @@ Column {
                 // Duration
                 Text {
                   anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
                   text: modelData.duration || ""
                   color: p.dim; font.family: p.fontFamily; font.pixelSize: Style.font.caption
                 }
@@ -838,6 +892,7 @@ Column {
           // Import error notice
           Text {
             visible: p.plImportError !== ""
+            textFormat: Text.PlainText
             text: p.plImportError
             color: p.urgent; font.family: p.fontFamily; font.pixelSize: Style.font.caption
           }

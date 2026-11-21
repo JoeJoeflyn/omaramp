@@ -7,7 +7,7 @@ function render(ctx, d) {
   var col = 0
   for (var rn = 0; rn < count; rn++) {
     var level = d.playing ? (bands[rn] || 0) : 0
-    var rnx = rn * (barW + gap)
+    var rnx = d.x0 + rn * (barW + gap)
     for (var rcol = 0; rcol < barW; rcol += S, col++) {
       var seed = col * 7919 + 104729
       if (H.scatterHash(rn, 0, col, Math.floor(frame / 12)) > level * 1.6 + 0.1) continue

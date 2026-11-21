@@ -8,7 +8,7 @@ function render(ctx, d) {
   for (var i = 0; i < count; i++) {
     var level = d.playing ? (bands[i] || 0) : 0
     var barH = Math.round(level * h)
-    var x = i * (barW + gap)
+    var x = d.x0 + i * (barW + gap)
     if (barH > 0) {
       var y = h - barH
       ctx.strokeStyle = H.specColor(1 - y / h)

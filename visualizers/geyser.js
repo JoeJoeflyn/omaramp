@@ -11,8 +11,9 @@ function render(ctx, d) {
   var rngVal = s.geyserRng
   var particles = s.geyserParticles
   function rng01() {
-    rngVal = (rngVal * 1664525 + 1013904223) & 0xFFFFFFFF
-    return ((rngVal >> 16) % 1000) / 1000.0
+    // >>> keeps the state unsigned; with & and >> half the draws were negative: the jet leaned left and ran red
+    rngVal = (rngVal * 1664525 + 1013904223) >>> 0
+    return ((rngVal >>> 16) % 1000) / 1000.0
   }
   var bass = H.bandAvg(bands, 0, Math.max(1, Math.floor(count / 3)))
   var mid = H.bandAvg(bands, Math.floor(count / 3), Math.floor(2 * count / 3))

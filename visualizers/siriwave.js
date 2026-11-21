@@ -34,7 +34,7 @@ function render(ctx, d) {
 
   // Smooth, non-chaotic phase travel modulated by music tempo
   var speed = 0.035 + (totalEnergy * 0.035)
-  var phase = frame * speed
+  var phase = H.advancePhase(d.state, "siriPhase", frame, speed)
 
   // Apple Global Attenuation Formula: (4 / (4 + x^4))^4 on x in [-2, 2]
   function globalAttenuation(x) {

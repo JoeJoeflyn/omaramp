@@ -19,7 +19,7 @@ function render(ctx, d) {
     ctx.strokeStyle = "rgba(255, 255, 255, 0.18)"
     ctx.lineWidth = 1.0
     ctx.beginPath()
-    ctx.ellipse(cx, cy, w * 0.18, h * 0.18, 0, 0, Math.PI * 2)
+    ctx.ellipse(cx - w * 0.18, cy - h * 0.18, w * 0.36, h * 0.36)
     ctx.stroke()
     return
   }
@@ -30,15 +30,18 @@ function render(ctx, d) {
 
   var numNodes = 72
   // Gentle, musical rotation speed
-  var rotX = frame * (0.006 + totalEnergy * 0.006)
-  var rotY = frame * (0.010 + totalEnergy * 0.010)
+  var rotY = H.advancePhase(d.state, "warpPhase", frame, 0.010 + totalEnergy * 0.010)
+  var rotX = rotY * 0.6
   var waveLen = wave.length
 
   var vertices = []
-  // Safe bounded radius that fits comfortably inside the HUD box
-  var radiusX = (w * 0.28) * (0.85 + bass * 0.25 + beatDrop * 0.15)
-  var radiusY = (h * 0.32) * (0.85 + bass * 0.20 + beatDrop * 0.15)
-  var radiusZ = radiusX * 0.60
+  // Rotate in model space, then scale independently for the wide, short HUD.
+  // Scaling Z by the canvas width before rotation used to throw Y off-screen.
+  var scaleX = Math.max(0, w / 2 - 4) * 0.80
+  var scaleY = Math.max(0, h / 2 - 4) * 0.80
+  var pulse = 0.85 + bass * 0.10 + beatDrop * 0.08
+  var cosY = Math.cos(rotY), sinY = Math.sin(rotY)
+  var cosX = Math.cos(rotX), sinX = Math.sin(rotX)
 
   // 1. Calculate 3D Parametric Mobius / Torus Vertices Deformed by Raw Waveform
   for (var i = 0; i <= numNodes; i++) {
@@ -55,27 +58,23 @@ function render(ctx, d) {
 
     var p = 2, q = 3
     var r = 0.55 + 0.3 * Math.cos(q * u)
-    var audioDisplacement = 1.0 + (waveVal * (0.35 + highs * 0.25 + beatDrop * 0.20))
+    var audioDisplacement = pulse * (1.0 + waveVal * (0.14 + highs * 0.10 + beatDrop * 0.06))
 
-    var rawX = r * Math.cos(p * u) * radiusX * audioDisplacement
-    var rawY = r * Math.sin(p * u) * radiusY * audioDisplacement
-    var rawZ = -Math.sin(q * u) * radiusZ * audioDisplacement
+    var rawX = r * Math.cos(p * u) * audioDisplacement
+    var rawY = r * Math.sin(p * u) * audioDisplacement
+    var rawZ = -Math.sin(q * u) * 0.35 * audioDisplacement
 
     // 3D Matrix Rotation
-    var cosY = Math.cos(rotY), sinY = Math.sin(rotY)
     var x1 = rawX * cosY + rawZ * sinY
     var z1 = -rawX * sinY + rawZ * cosY
 
-    var cosX = Math.cos(rotX), sinX = Math.sin(rotX)
     var y1 = rawY * cosX - z1 * sinX
     var z2 = rawY * sinX + z1 * cosX
 
     // 3D Perspective Projection
-    var fov = 220.0
-    var projZ = z2 + 260.0
-    var projScale = fov / Math.max(10.0, projZ)
-    var px = cx + x1 * projScale
-    var py = cy + y1 * projScale
+    var projScale = 2.5 / (2.8 + z2)
+    var px = cx + x1 * projScale * scaleX
+    var py = cy + y1 * projScale * scaleY
 
     vertices.push({ x: px, y: py, z: z2, wave: waveVal })
   }
@@ -99,7 +98,7 @@ function render(ctx, d) {
   for (var v = 0; v < vertices.length - 1; v++) {
     var v0 = vertices[v]
     var v1 = vertices[v + 1]
-    var zNorm = (v0.z + radiusZ) / (radiusZ * 2.0)
+    var zNorm = Math.max(0, Math.min(1, (v0.z + 1) * 0.5))
     var audioEnergy = Math.abs(v0.wave)
 
     var alpha = Math.min(1.0, 0.40 + zNorm * 0.35 + audioEnergy * 0.40 + beatDrop * 0.15)

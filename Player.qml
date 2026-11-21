@@ -18,7 +18,6 @@ import "visualizers/scatter.js" as VisScatter
 import "visualizers/flame.js" as VisFlame
 import "visualizers/pulse.js" as VisPulse
 import "visualizers/matrix.js" as VisMatrix
-import "visualizers/binary.js" as VisBinary
 import "visualizers/butterfly.js" as VisButterfly
 import "visualizers/sakura.js" as VisSakura
 import "visualizers/firework.js" as VisFirework
@@ -36,11 +35,8 @@ import "visualizers/sine.js" as VisSine
 import "visualizers/siriwave.js" as VisSiriWave
 import "visualizers/soundcloud_wave.js" as VisSoundCloudWave
 import "visualizers/telegram_wave.js" as VisTelegramWave
-import "visualizers/daw_wave.js" as VisDAWWave
 import "visualizers/led_scrubber.js" as VisLEDScrubber
 import "visualizers/heatmap_wave.js" as VisHeatmapWave
-import "visualizers/grounded_wave.js" as VisGroundedWave
-import "visualizers/plasma.js" as VisPlasma
 import "visualizers/osc_warp.js" as VisOscWarp
 import "visualizers/crt_scanline.js" as VisCRTScanline
 import "visualizers/cyber_tunnel.js" as VisCyberTunnel
@@ -64,17 +60,14 @@ Item {
   property real beatDropPulse: 0.0
   property real _bassAvg: 0.0
   property double _lastDropTime: 0
+  property real shaderTime: 0
 
   function updateBeatDrop() {
-    if (!p || !p.visBands || p.visBands.length < 3 || !p.isPlaying) {
-      beatDropPulse = 0.0
-      return
-    }
-    var subBass = (p.visBands[0] + p.visBands[1] + p.visBands[2]) / 3.0
-    var avg = _bassAvg * 0.85 + subBass * 0.15
-    _bassAvg = avg
-    var delta = subBass - avg
+    var subBass = Math.max(p.visBands[1], p.visBands[2], p.visBands[3], p.visBands[4], p.visBands[5])
+    var delta = subBass - _bassAvg
+    _bassAvg = _bassAvg * 0.85 + subBass * 0.15
     var now = Date.now()
+    shaderTime += 0.025 + subBass * 0.026 + beatDropPulse * 0.02
     if (subBass > 0.40 && delta > 0.15 && (now - _lastDropTime) > 260) {
       beatDropPulse = 1.0
       _lastDropTime = now
@@ -98,7 +91,7 @@ Item {
     lyricsUrl = p.currentUrl
     _lyricsFor = p.currentTrack + "\n" + p.currentArtist + "\n" + p.currentUrl
     lyricsProc.running = false
-    lyricsProc.command = ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "lyrics", p.currentTrack, p.currentArtist, p.currentUrl]
+    lyricsProc.command = p._ctl.concat(["lyrics", p.currentTrack, p.currentArtist, p.currentUrl])
     lyricsProc.running = true
   }
 
@@ -159,15 +152,14 @@ Item {
     "peaks": VisPeaks.render, "wave": VisWave.render, "scope": VisScope.render,
     "heartbeat": VisHeartbeat.render, "retro": VisRetro.render, "scatter": VisScatter.render,
     "flame": VisFlame.render, "pulse": VisPulse.render, "matrix": VisMatrix.render,
-    "binary": VisBinary.render, "butterfly": VisButterfly.render, "sakura": VisSakura.render,
+    "butterfly": VisButterfly.render, "sakura": VisSakura.render,
     "firework": VisFirework.render, "bubbles": VisBubbles.render, "rain": VisRain.render,
     "terrain": VisTerrain.render, "logo": VisLogo.render, "firefly": VisFirefly.render,
     "geyser": VisGeyser.render, "mosaic": VisMosaic.render, "sand": VisSand.render,
     "stereo": VisStereo.render, "ascii": VisAscii.render, "sine": VisSine.render,
     "siriwave": VisSiriWave.render, "soundcloud_wave": VisSoundCloudWave.render,
-    "telegram_wave": VisTelegramWave.render, "daw_wave": VisDAWWave.render,
+    "telegram_wave": VisTelegramWave.render,
     "led_scrubber": VisLEDScrubber.render, "heatmap_wave": VisHeatmapWave.render,
-    "grounded_wave": VisGroundedWave.render, "plasma": VisPlasma.render,
     "osc_warp": VisOscWarp.render, "crt_scanline": VisCRTScanline.render,
     "cyber_tunnel": VisCyberTunnel.render
   })
@@ -178,15 +170,14 @@ Item {
     "peaks": "Peaks", "wave": "Wave", "scope": "Scope",
     "heartbeat": "Heartbeat", "retro": "Retro", "scatter": "Scatter",
     "flame": "Flame", "pulse": "Pulse", "matrix": "Matrix",
-    "binary": "Binary", "butterfly": "Butterfly", "sakura": "Sakura",
+    "butterfly": "Butterfly", "sakura": "Sakura",
     "firework": "Firework", "bubbles": "Bubbles", "rain": "Rain",
     "terrain": "Terrain", "logo": "Logo", "firefly": "Firefly",
     "geyser": "Geyser", "mosaic": "Mosaic", "sand": "Sand",
     "stereo": "Stereo", "ascii": "Ascii", "sine": "Sine Wave",
     "siriwave": "Siri Wave", "soundcloud_wave": "SoundCloud Wave",
-    "telegram_wave": "Telegram Wave", "daw_wave": "DAW Peak Wave",
+    "telegram_wave": "Telegram Wave",
     "led_scrubber": "LED Scrubber", "heatmap_wave": "Heatmap Wave",
-    "grounded_wave": "Baseline Wave", "plasma": "Liquid Plasma",
     "osc_warp": "Oscilloscope Warp", "crt_scanline": "CRT Radar Scope",
     "cyber_tunnel": "3D Cyber Tunnel",
     "glsl_plasma": "GPU Plasma (GLSL)",
@@ -198,7 +189,15 @@ Item {
 
   Connections {
     target: p
-    function onVisModeChanged() { p._visState = ({}) }
+    function onVisModeChanged() { p._visState = ({}); root.requestPaint() }
+    function onVisFrameChanged() { root.updateBeatDrop(); root.requestPaint() }
+    function onVisActiveChanged() {
+      if (!p.visActive) {
+        root._bassAvg = 0
+        root._lastDropTime = 0
+        root.beatDropPulse = 0
+      }
+    }
   }
 
   BorderSurface {
@@ -312,17 +311,20 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
 
           Image {
+            id: artImage
             anchors.fill: parent; anchors.margins: 1
-            visible: p.artPath !== ""
+            visible: status === Image.Ready
             asynchronous: true
             source: (p.artPath && (p.artPath.indexOf("http://") === 0 || p.artPath.indexOf("https://") === 0 || p.artPath.indexOf("file://") === 0)) ? p.artPath : (p.artPath ? "file://" + p.artPath : "")
             fillMode: Image.PreserveAspectCrop
             sourceSize.width: 72; sourceSize.height: 72
           }
 
+          // Also while the art loads or when it cannot (an online thumbnail offline, say),
+          // which left an empty box before
           Text {
             anchors.centerIn: parent
-            visible: p.artPath === ""
+            visible: artImage.status !== Image.Ready
             text: "\uf001"
             color: p.dynamicAccent
             font.family: p.fontFamily; font.pixelSize: Style.font.caption
@@ -354,7 +356,7 @@ Item {
               readonly property real loopDistance: titleText1.implicitWidth + Style.space(40)
 
               NumberAnimation on x {
-                running: titleScroller.needsScroll && p.isPlaying
+                running: titleScroller.needsScroll && p.isPlaying && p.opened
                 loops: Animation.Infinite
                 from: 0
                 to: -titleScroller.loopDistance
@@ -405,7 +407,7 @@ Item {
               readonly property real loopDistance: artistText1.implicitWidth + Style.space(40)
 
               NumberAnimation on x {
-                running: artistScroller.needsScroll && p.isPlaying
+                running: artistScroller.needsScroll && p.isPlaying && p.opened
                 loops: Animation.Infinite
                 from: 0
                 to: -artistScroller.loopDistance
@@ -455,7 +457,8 @@ Item {
           visible: p.visMode.indexOf("glsl_") === 0
           z: 4
 
-          readonly property real u_time: p.visFrame * 0.025
+          readonly property real u_time: root.shaderTime
+          readonly property real u_aspect: width / Math.max(1, height)
           readonly property real u_bass: {
             if (!p || !p.visBands || p.visBands.length < 4) return 0.0
             var s = 0; for (var i = 0; i < 4; i++) s += (p.visBands[i] || 0)
@@ -485,13 +488,13 @@ Item {
           z: 4
 
           onPaint: {
-            root.updateBeatDrop()
             var ctx = getContext("2d")
-            var w = width, h = height
-            ctx.clearRect(0, 0, w, h)
+            var w = Math.floor(width), h = Math.floor(height)
+            if (w < 1 || h < 1) return
+            ctx.clearRect(0, 0, width, height)
 
             // ── Animated Nebula Plasma Background ──
-            if (p.isPlaying) {
+            if (p.visActive) {
               var ar = p.dynamicAccent.r, ag = p.dynamicAccent.g, ab = p.dynamicAccent.b
               var t = p.visFrame * 0.02
               var beat = root.beatDropPulse
@@ -520,7 +523,7 @@ Item {
                 var radius = Math.max(radiusX, radiusY)
 
                 var grad = ctx.createRadialGradient(bx, by, 0, bx, by, radius)
-                var alpha = 0.45 + beat * 0.25 + bass * 0.15
+                var alpha = bass * 0.15 + beat * 0.10
                 grad.addColorStop(0, "rgba(" + Math.round(bl.r * 255) + "," + Math.round(bl.g * 255) + "," + Math.round(bl.b * 255) + "," + alpha.toFixed(2) + ")")
                 grad.addColorStop(0.6, "rgba(" + Math.round(bl.r * 180) + "," + Math.round(bl.g * 120) + "," + Math.round(bl.b * 180) + "," + (alpha * 0.35).toFixed(2) + ")")
                 grad.addColorStop(1, "rgba(0,0,0,0)")
@@ -531,17 +534,22 @@ Item {
             }
 
             // ── Visualizer on top ──
-            var count = 24, gap = 3
-            var barW = Math.floor((w - (count - 1) * gap) / count)
+            var count = 24
+            var gap = Math.max(0, Math.min(3, Math.floor((w - count) / (count - 1))))
+            var barW = (w - (count - 1) * gap) / count
             var fn = root._renderers[p.visMode]
-            if (fn) fn(ctx, {
-              bands: p.visBands, wave: p.visWave, frame: p.visFrame,
-              playing: p.isPlaying, width: w, height: h, S: 2,
-              count: count, barW: barW, gap: gap,
-              accent: p.dynamicAccent, foreground: p.foreground, dim: p.dim,
-              beatDrop: root.beatDropPulse, progress: p.progress,
-              state: p._visState
-            })
+            if (!fn) return
+            ctx.save()
+            try {
+              fn(ctx, {
+                bands: p.visBands, wave: p.visWave, lr: p.visLR, frame: p.visFrame,
+                playing: p.visActive, width: w, height: h, S: 2,
+                count: count, barW: barW, gap: gap, x0: 0,
+                accent: p.dynamicAccent, foreground: p.foreground, dim: p.dim,
+                beatDrop: root.beatDropPulse, progress: p.progress,
+                state: p._visState
+              })
+            } finally { ctx.restore() }
           }
         }
 
@@ -747,7 +755,7 @@ Item {
 
   Process {
     id: lyricsProc
-    command: ["python3", Qt.resolvedUrl("cliamp_ctl.py").toString().replace("file://", ""), "lyrics", p.currentTrack, p.currentArtist]
+    command: p._ctl.concat(["lyrics", p.currentTrack, p.currentArtist])
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {

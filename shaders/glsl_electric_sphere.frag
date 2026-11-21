@@ -12,17 +12,18 @@ layout(std140, binding = 0) uniform buf {
     float u_highs;
     float u_beat;
     vec3 u_accent;
+    float u_aspect;
 };
 
 void main() {
     vec2 uv = qt_TexCoord0 * 2.0 - 1.0;
     
-    // Correct aspect ratio and span higher vertically (no more squished flat ellipse)
-    vec2 p = vec2(uv.x * 0.50, uv.y * 0.88);
+    // Fit the orb to the shorter axis without stretching the circle.
+    vec2 p = uv * vec2(max(1.0, u_aspect), 1.0 / min(1.0, u_aspect));
     float r = length(p);
     float a = atan(p.y, p.x);
     
-    float t = u_time * (1.0 + u_bass * 2.0 + u_beat * 1.5);
+    float t = u_time;
     
     // 1. Taller, Volumetric Plasma Sphere Core
     float sphereRadius = 0.48 * (0.80 + u_bass * 0.40 + u_beat * 0.30);
@@ -36,7 +37,7 @@ void main() {
     
     if (distortedR < sphereRadius) {
         // Inner glowing core
-        float core = 1.0 - (distortedR / sphereRadius);
+        float core = clamp(1.0 - distortedR / sphereRadius, 0.0, 1.0);
         col = mix(u_accent, vec3(1.0), pow(core, 1.8));
     } else {
         // Outer electric corona bloom
@@ -49,5 +50,5 @@ void main() {
     // Vignette
     col *= clamp(1.5 - r * 1.1, 0.0, 1.0);
     
-    fragColor = vec4(col, 0.95) * qt_Opacity;
+    fragColor = vec4(clamp(col, 0.0, 1.0), 1.0) * qt_Opacity;
 }

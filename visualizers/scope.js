@@ -1,4 +1,4 @@
-// Scope — Lissajous XY oscilloscope with smooth phase rotation & phosphor trace
+// Scope — XY plot of the waveform against a fixed, delayed copy
 .pragma library
 
 function render(ctx, d) {
@@ -17,18 +17,13 @@ function render(ctx, d) {
   ctx.beginPath()
 
   if (n > 4 && d.playing) {
-    var baseDelay = Math.floor(n / 4)
-    // Slower, smooth Lissajous wobble (0.005 instead of 0.02)
-    var wobble = Math.sin(d.frame * 0.006) * (n / 8)
-    var delay = Math.max(1, Math.min(n - 1, Math.floor(baseDelay + wobble)))
+    var delay = Math.max(1, Math.floor(n / 8))
     var plotPoints = Math.min(n - delay, 256)
     var step = Math.max(1, Math.floor((n - delay) / plotPoints))
 
     for (var i = 0; i + delay < n; i += step) {
-      var x = Math.floor((wave[i] + 1.0) * 0.5 * (w - 1))
-      var y = Math.floor((1.0 - wave[i + delay]) * 0.5 * (h - 1))
-      x = Math.max(2, Math.min(w - 3, x))
-      y = Math.max(2, Math.min(h - 3, y))
+      var x = w * (0.5 + 0.44 * wave[i])
+      var y = h * (0.5 - 0.44 * wave[i + delay])
       if (i === 0) ctx.moveTo(x, y)
       else ctx.lineTo(x, y)
     }

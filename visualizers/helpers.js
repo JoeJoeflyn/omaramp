@@ -4,11 +4,19 @@
 // scatterHash — deterministic per-dot hash for stable particle patterns
 function scatterHash(band, row, col, frame) {
   var f = Math.floor((frame + row * 3 + col) / 3)
-  var h = (band * 7919 + row * 6271 + col * 3037 + f * 104729) & 0xFFFFFFFF
-  h ^= Math.floor(h / 65536)
-  h = (h * 0x45d9f3b) & 0xFFFFFFFF
-  h ^= Math.floor(h / 65536)
-  return (h % 10000) / 10000.0
+  var h = (band * 7919 + row * 6271 + col * 3037 + f * 104729) | 0
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b)
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
+}
+
+// Integrate speed over new audio frames; an amplitude change must not
+// rephase the entire elapsed animation, and a repaint is not a new frame.
+function advancePhase(state, key, frame, speed) {
+  var phase = state[key]
+  if (!phase) phase = state[key] = { frame: frame, value: 0 }
+  if (frame > phase.frame) phase.value += speed * Math.min(3, frame - phase.frame)
+  phase.frame = frame
+  return phase.value
 }
 
 // sampleBandLinear — linear interpolation between band values
@@ -50,25 +58,21 @@ function bandAvg(b, lo, hi) {
   return s / (hi - lo)
 }
 
+// Keep the full frequency range on small canvases by drawing fewer columns,
+// rather than laying out the same number and losing the ends to clipping.
+function fitColumns(width, desired, minWidth, spacing) {
+  var margin = Math.min(6, width * 0.08)
+  var room = width - margin * 2
+  var count = Math.max(1, Math.min(desired, Math.floor((room + spacing) / (minWidth + spacing))))
+  return { count: count, gap: spacing, left: margin, width: (room - (count - 1) * spacing) / count }
+}
+
 // specWrap: 3 discrete color tiers (green/yellow/red at 0.3/0.6)
 // SpectrumLow = bright green, SpectrumMid = bright yellow, SpectrumHigh = bright red
 function specColor(norm) {
   if (norm >= 0.6) return "rgba(255, 85, 85, 0.9)"   // bright red
   if (norm >= 0.3) return "rgba(255, 255, 85, 0.9)"  // bright yellow
   return "rgba(85, 255, 85, 0.9)"                    // bright green
-}
-
-// LCG RNG — uses 64-bit constants that JS doubles can't handle precisely.
-// 32-bit Numerical Recipes LCG produces equivalent deterministic pseudo-randomness.
-function lcgRng(state) {
-  state.v = (state.v * 1664525 + 1013904223) & 0xFFFFFFFF
-  return state.v
-}
-
-// Extract [0,1) float from upper bits of an LCG state (use >>16, not >>33)
-function lcgRand01(state) {
-  lcgRng(state)
-  return ((state.v >> 16) % 1000) / 1000.0
 }
 
 // Universal rounded rectangle path compatible with all Qt Quick Canvas versions
