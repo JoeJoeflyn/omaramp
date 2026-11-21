@@ -9,31 +9,27 @@ function render(ctx, d) {
   var s = d.state
 
   // Initialize rolling ECG buffer
-  if (!s.ecgBuffer || s.ecgBuffer.length !== Math.floor(w)) {
-    s.ecgBuffer = new Array(Math.floor(w)).fill(midY)
+  if (!s.ecgBuffer || s.ecgBuffer.length !== w || s.ecgHeight !== h) {
+    s.ecgBuffer = new Array(w).fill(midY)
+    s.ecgHeight = h
     s.ecgHead = 0
+    s.ecgLastFrame = -1
+    s.ecgBeatFrame = -20
   }
 
-  var bands = d.bands || []
-  var bass = H.bandAvg(bands, 0, 4)
-  var beatDrop = d.beatDrop || 0
-  var n = wave.length
-
-  // Calculate current pulse sample directly from audio signal
-  var sampleVal = midY
-  if (isPlaying) {
-    var rawSample = (n > 0) ? (wave[s.ecgHead % n] || 0) : 0
-    var kickAmp = (bass * (h * 0.46)) + (beatDrop * (h * 0.35))
-    // Cardiac QRS spike triggered by live bass kicks and audio waveform
-    var cardiac = Math.sin(frame * 0.5) * kickAmp + rawSample * (h * 0.25)
-    sampleVal = Math.max(2, Math.min(h - 3, midY - cardiac))
-  }
-
-  // Advance sweep head smoothly across monitor (2.0 px per frame = ~1.5s sweep)
-  var speed = 2
-  for (var sp = 0; sp < speed; sp++) {
-    s.ecgBuffer[s.ecgHead] = sampleVal
-    s.ecgHead = (s.ecgHead + 1) % s.ecgBuffer.length
+  // A short QRS-like shape follows the onset, not the phase of a free-running sine.
+  if (isPlaying && frame !== s.ecgLastFrame) {
+    s.ecgLastFrame = frame
+    if (d.beatDrop === 1) s.ecgBeatFrame = frame
+    var age = frame - s.ecgBeatFrame
+    var pulse = [0.12, -0.18, 0.95, -0.36, 0.05, 0.20, 0.10][age] || 0
+    var rawSample = wave[Math.floor(wave.length / 3)] || 0
+    var sampleVal = midY - (pulse * 0.33 + rawSample * 0.10) * h
+    var speed = Math.max(1, Math.round(w / 52))
+    for (var sp = 0; sp < speed; sp++) {
+      s.ecgBuffer[s.ecgHead] = sampleVal
+      s.ecgHead = (s.ecgHead + 1) % w
+    }
   }
 
   // 1. Draw subtle grid / dashed baseline
@@ -56,10 +52,9 @@ function render(ctx, d) {
 
   for (var x = 0; x < bufLen; x++) {
     // Gap right ahead of the sweep head
-    var distBehind = (head - x + bufLen) % bufLen
-    if (distBehind < 8) continue // erase head margin
+    var distAhead = (x - head + bufLen) % bufLen
+    if (distAhead < Math.min(8, Math.floor(w / 4))) { started = false; continue } // erase head margin
 
-    var alpha = Math.max(0.15, 1.0 - (distBehind / bufLen) * 0.85)
     var y = s.ecgBuffer[x]
 
     if (!started) {
@@ -74,9 +69,9 @@ function render(ctx, d) {
   ctx.stroke()
 
   // 3. Glowing Sweep Cursor / Beam Head
-  var headY = s.ecgBuffer[head] || midY
+  var tip = (head - 1 + bufLen) % bufLen
   ctx.fillStyle = "#ffffff"
   ctx.beginPath()
-  ctx.arc(head, headY, 2.5, 0, Math.PI * 2)
+  ctx.arc(tip, s.ecgBuffer[tip], 2.5, 0, Math.PI * 2)
   ctx.fill()
 }

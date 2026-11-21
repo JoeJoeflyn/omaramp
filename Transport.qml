@@ -86,7 +86,10 @@ Row {
 
       Rectangle {
         anchors.verticalCenter: parent.verticalCenter
-        width: parent.width; height: Style.space(4); radius: Style.space(2); color: "#1a1c23"
+        // From the theme's foreground: a fixed near-black track vanished into dark themes' popups
+        // and looked like a hole in light ones
+        width: parent.width; height: Style.space(4); radius: Style.space(2)
+        color: Qt.rgba(p.foreground.r, p.foreground.g, p.foreground.b, 0.18)
 
         Rectangle {
           width: Math.max(Style.space(2), parent.width * (p.volumePct / 100.0))

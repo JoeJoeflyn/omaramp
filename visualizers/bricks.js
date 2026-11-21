@@ -10,7 +10,7 @@ function render(ctx, d) {
   var rowUnit = 4
   for (var i = 0; i < count; i++) {
     var level = d.playing ? (bands[i] || 0) : 0
-    var x = i * (barW + gap)
+    var x = d.x0 + i * (barW + gap)
     for (var sy = 0; sy < h; sy += rowUnit) {
       var rowThreshold = (h - 1 - sy) / h
       if (level <= rowThreshold) continue

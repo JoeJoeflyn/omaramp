@@ -9,9 +9,11 @@ function render(ctx, d) {
   var s = d.state
 
   // Initialize particle pool and ground elevation map
-  if (!s.sandParticles) {
+  if (!s.sandParticles || s.sandWidth !== w || s.sandHeight !== h) {
+    s.sandWidth = w
+    s.sandHeight = h
     s.sandParticles = []
-    s.groundBeds = new Float32Array(Math.floor(w / 4)).fill(0)
+    s.groundBeds = new Float32Array(Math.max(1, Math.floor(w / 4)))
     s.sandRng = 0x5A4D5A4D
   }
 
@@ -22,7 +24,7 @@ function render(ctx, d) {
 
   var rngVal = s.sandRng || 0x5A4D5A4D
   function rand01() {
-    rngVal = (rngVal * 1103515245 + 12345) & 0x7fffffff
+    rngVal = (Math.imul(rngVal, 1103515245) + 12345) & 0x7fffffff
     return (rngVal >>> 16) / 32768.0
   }
 
@@ -43,13 +45,10 @@ function render(ctx, d) {
         var centreX = (b + 0.5) * (w / numBands)
         var sx = centreX + (rand01() - 0.5) * (w / numBands * 0.8)
 
-        var tier = 1
         var color = "rgba(85, 255, 85, 0.95)"     // Green (treble)
         if (b < numBands / 3) {
-          tier = 3
           color = "rgba(255, 85, 85, 0.95)"      // Red (bass)
         } else if (b < 2 * numBands / 3) {
-          tier = 2
           color = "rgba(255, 255, 85, 0.95)"     // Yellow (mids)
         }
 

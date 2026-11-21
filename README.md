@@ -14,25 +14,27 @@ Inspired by Winamp & [cliamp](https://github.com/brianstrauch/cliamp).
 ## 🌟 Features
 
 - **Retro Winamp HUD**: Digital LED time counter (`01:23 / 03:45`), KBPS/Stereo badges, track marquee ticker, and smooth playhead scrubber.
-- **37 Live Visualizer Styles**: Categorized selector featuring:
-  - **Classic & VU**: Bars, Classic LED, Peaks, Columns, Bars Dot, Bars Outline, Bricks, Stereo VU, ASCII.
-  - **Waves & Scopes**: Siri Wave (Apple iOS 9 algorithm), Sine Wave (standing acoustic harmonics), SoundCloud Wave (ultra-thin asymmetrical), Telegram Wave (voice capsule pills), DAW Peak Wave (RMS + True Peak dual-layer), LED Scrubber (discrete matrix blocks), Heatmap Wave (thermal energy gradient), Baseline Wave (grounded floor spectrum), XY Scope, Waveform, Heartbeat.
-  - **Synth & Retro**: Retro Synth, Flame, Pulse, Matrix, Terrain, Binary, Logo, Mosaic.
+- **40 Live Visualizer Styles**: Categorized selector featuring:
+  - **Classic & VU**: Bars, Classic LED, Peaks, Columns, Bars Dot, Bars Outline, Bricks, Stereo VU (real left/right levels), ASCII.
+  - **Waves & Scopes**: Siri Wave (Apple iOS 9 algorithm), Sine Wave (standing acoustic harmonics), SoundCloud Wave (ultra-thin asymmetrical), Telegram Wave (voice capsule pills), LED Scrubber (discrete matrix blocks), Heatmap Wave (thermal energy gradient), XY Scope, Waveform, Heartbeat.
+  - **Synth & Retro**: Retro Synth, Flame, Pulse, Matrix, Terrain, Logo, Mosaic.
   - **Particles & Nature**: Sand, Firework, Geyser, Firefly, Sakura, Bubbles, Rain, Butterfly, Scatter.
+  - **3D & GPU**: GPU Plasma, GPU Wormhole, GPU Lightning Orb, Oscilloscope Warp, CRT Radar Scope, 3D Cyber Tunnel.
 - **10-Band Equalizer & DSP Effects**:
   - 10-Band Pro EQ presets: *Flat, Bass Boost, Rock, Electronic, Pop, Vocal Clarity, Acoustic, Treble Boost, Late Night*.
   - **3D Spatial Audio Widener**: Binaural stereo expansion.
   - **EBU R128 Dynamic Loudness Normalizer**: Anti-earblast volume evening.
 - **Synced Lyrics**: Live word-by-word synced lyrics powered by lrclib.net.
 - **Streaming & YouTube Integration**:
-  - Instant YouTube track search with auto-thumbnail prefetching.
+  - Instant YouTube track search with auto-thumbnail prefetching; **Show more results** loads ten more at a time.
   - Direct-stream audio playback with smart URL caching and prefetching.
   - Direct Spotify track links (`open.spotify.com/track/...`) and playlist/album importer.
 - **Queue Manager (Up Next)**: Interactive queue tab with reordering, queue count badges, and auto-play next.
+- **Plays on from any list**: Next, Previous and auto-play walk the list a song was started from: a playlist, the search results or Recents.
 - **Full Transport Deck**: Play/Pause, Next, Prev, Stop, Shuffle, Repeat, Volume slider, and Speed controls (0.5x–2.0x).
 - **Keyboard Shortcuts**: `Space` (play/pause), `Left`/`Right` (seek), `Up`/`Down` (volume), `/` (search), `m` (mute), `Esc` (close).
-- **Zero-Overhead Idle**: Sub-process sleep and lightweight PipeWire monitoring when paused or closed (~42 MB RAM, ~0.5% CPU playback).
-- **Status Bar Widget**:
+- **Spectrum capture**: Uses the default audio output’s monitor while the panel is open. Pausing or losing fresh audio frames clears the visualizer.
+- **Status Bar Widget**: Can display an elided track title on horizontal bars. Full track details remain in the tooltip.
   - **Left Click**: Toggle popup player panel.
   - **Middle Click**: Instant Play/Pause toggle.
   - **Right Click**: Skip to next track.
@@ -108,7 +110,7 @@ omarchy restart shell
 
 ## ⌨️ Shell / IPC Commands
 
-Control Omaramp from your terminal, scripts, or window manager hotkeys:
+Control Omaramp from your terminal, scripts, or window manager hotkeys. With the widget in the bar, playback commands work without opening the panel first:
 
 ```bash
 # Toggle player panel
@@ -118,7 +120,7 @@ omarchy-shell shell toggle omaramp
 # Playback controls
 omarchy-shell omaramp play
 omarchy-shell omaramp pause
-omarchy-shell omaramp toggle
+omarchy-shell omaramp togglePlayback
 omarchy-shell omaramp stop
 
 # Navigation

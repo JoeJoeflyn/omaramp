@@ -18,7 +18,7 @@ void main() {
     vec2 uv = qt_TexCoord0 * 2.0 - 1.0;
     
     // Per-pixel GLSL fluid plasma synthesis
-    float t = u_time * (1.0 + u_bass * 1.5);
+    float t = u_time;
     
     float v1 = sin(uv.x * 6.0 + t);
     float v2 = sin(uv.y * 6.0 - t * 0.8 + v1);
@@ -36,5 +36,5 @@ void main() {
     float vig = 1.0 - length(uv * vec2(0.8, 1.2));
     col *= clamp(vig * 1.5, 0.0, 1.0);
     
-    fragColor = vec4(col, 0.95) * qt_Opacity;
+    fragColor = vec4(clamp(col, 0.0, 1.0), 1.0) * qt_Opacity;
 }

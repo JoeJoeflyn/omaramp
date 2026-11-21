@@ -10,8 +10,10 @@ import re
 import signal
 import shutil
 import fcntl
-import urllib.request
+# urllib.request is imported inside the functions that go online: it pulls in http.client,
+# email and ssl, about 55 ms, and the status poll the panel runs every half second never needs it.
 import urllib.parse
+from contextlib import contextmanager
 try:
     import tomllib
 except ImportError:
@@ -46,6 +48,8 @@ NEXT_STACK_PATH = os.path.join(CACHE_DIR, "next_stack.json")
 PLAYBACK_CONTEXT_PATH = os.path.join(CACHE_DIR, "playback_context.json")
 PLAY_MODE_PATH = os.path.join(CACHE_DIR, "play_mode.json")
 STATE_LOCK_FILE = os.path.join(CACHE_DIR, "state.lock")
+LAST_SEARCH_PATH = os.path.join(CACHE_DIR, "last_search.json")
+ADVANCE_LOCK_FILE = os.path.join(RUN_DIR, "advance.lock")
 
 _MPV_REQ_ID = 0
 
@@ -73,10 +77,10 @@ def get_cached_stream_url(url):
         with open(STREAM_CACHE_PATH, "r", encoding="utf-8") as f:
             cache = json.load(f)
         entry = cache.get(url)
-        if entry:
+        if entry and entry.get("tls_verified") is True:
             if time.time() - entry.get("timestamp", 0) < 7200:
                 d_url = entry.get("direct_url")
-                if d_url:
+                if isinstance(d_url, str) and d_url.startswith("https://"):
                     m = re.search(r"[?&]expire=(\d+)", d_url)
                     if m:
                         exp_ts = int(m.group(1))
@@ -87,39 +91,39 @@ def get_cached_stream_url(url):
         pass
     return None
 
-def invalidate_stream_cache(url):
-    if not url or not os.path.exists(STREAM_CACHE_PATH):
-        return
+@contextmanager
+def edit_stream_cache():
+    # Playback and detached prefetch processes can update this file at the same time.
+    with open(STREAM_CACHE_PATH + ".lock", "a") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            with open(STREAM_CACHE_PATH, encoding="utf-8") as f:
+                cache = json.load(f)
+        except (OSError, ValueError):
+            cache = {}
+        yield cache if isinstance(cache, dict) else {}
+
+def invalidate_stream_cache(url, failed_url):
     try:
-        with open(STREAM_CACHE_PATH, "r", encoding="utf-8") as f:
-            cache = json.load(f)
-        if url in cache:
-            cache.pop(url, None)
-            atomic_write_json(STREAM_CACHE_PATH, cache)
-    except Exception:
+        with edit_stream_cache() as cache:
+            if cache.get(url, {}).get("direct_url") == failed_url:
+                del cache[url]
+                atomic_write_json(STREAM_CACHE_PATH, cache)
+    except (OSError, AttributeError):
         pass
 
 def set_cached_stream_url(url, direct_url):
     if not url or not direct_url:
         return
     try:
-        cache = {}
-        if os.path.exists(STREAM_CACHE_PATH):
-            try:
-                with open(STREAM_CACHE_PATH, "r", encoding="utf-8") as f:
-                    cache = json.load(f)
-            except Exception:
-                cache = {}
-        cache[url] = {
-            "direct_url": direct_url,
-            "timestamp": time.time()
-        }
-        if len(cache) > 100:
-            oldest = sorted(cache.keys(), key=lambda k: cache[k].get("timestamp", 0))[:20]
-            for k in oldest:
-                cache.pop(k, None)
-        atomic_write_json(STREAM_CACHE_PATH, cache)
-    except Exception:
+        with edit_stream_cache() as cache:
+            cache[url] = {"direct_url": direct_url, "timestamp": time.time(), "tls_verified": True}
+            if len(cache) > 100:
+                oldest = sorted(cache, key=lambda k: cache[k].get("timestamp", 0))[:20]
+                for k in oldest:
+                    del cache[k]
+            atomic_write_json(STREAM_CACHE_PATH, cache)
+    except (OSError, AttributeError):
         pass
 
 os.makedirs(AUDIO_CACHE_DIR, mode=0o700, exist_ok=True)
@@ -410,30 +414,31 @@ def save_playback_context(ctx):
 
 def play_playlist_action(name_or_url, start_index=0, url=None):
     start_index = int(start_index)
-    playlists = parse_playlists()
     found_pl = None
-    if url:
-        for pl in playlists:
-            for i, t in enumerate(pl.get("tracks", [])):
-                if t.get("real_url") == url or t.get("url") == url:
-                    found_pl = pl
-                    start_index = i
-                    break
-            if found_pl:
-                break
-    if not found_pl:
-        for pl in playlists:
-            if pl.get("name") == name_or_url or pl.get("id") == name_or_url:
-                found_pl = pl
-                break
+    for pl in parse_playlists():
+        if pl.get("name") == name_or_url or pl.get("id") == name_or_url:
+            found_pl = pl
+            break
+    # Search results and recents play as lists too, so next, prev and auto-advance walk them.
+    # Nobody chose them as a playlist, so they leave the queue alone.
+    is_list = not found_pl
     if not found_pl and name_or_url == "Recently Played":
         recents = parse_history(100)
         found_pl = {"name": "Recently Played", "tracks": [{"url": r.get("path", ""), "title": r.get("title", ""), "artist": r.get("artist", "")} for r in recents]}
-        
+    if not found_pl and name_or_url == "Search Results":
+        try:
+            with open(LAST_SEARCH_PATH, "r", encoding="utf-8") as f:
+                found_pl = {"name": "Search Results", "tracks": json.load(f)}
+        except Exception:
+            pass
+
     if not found_pl or not found_pl.get("tracks"):
         return {"success": False, "error": "Playlist not found or empty"}
-        
+
     tracks = found_pl["tracks"]
+    # The panel's copy of a list can be older than this one, so the url picks the row, not the number
+    if url and not (0 <= start_index < len(tracks) and url in (tracks[start_index].get("url"), tracks[start_index].get("real_url"))):
+        start_index = next((i for i, t in enumerate(tracks) if url in (t.get("url"), t.get("real_url"))), start_index)
     if start_index < 0 or start_index >= len(tracks):
         start_index = 0
         
@@ -443,7 +448,8 @@ def play_playlist_action(name_or_url, start_index=0, url=None):
         "index": start_index
     }
     save_playback_context(ctx)
-    clear_queue()
+    if not is_list:
+        clear_queue()
     clear_prev_stack()
     clear_next_stack()
     
@@ -512,6 +518,8 @@ def next_track():
     
     if pm.get("repeat") == "one":
         send_mpv_cmd(["seek", 0, "absolute"])
+        # mpv pauses at the end of a file (keep-open), so a loop has to start it again
+        send_mpv_cmd(["set_property", "pause", False])
         return {"success": True, "action": "repeat_one"}
 
     # 1. Check manual queue ("Up Next")
@@ -563,6 +571,23 @@ def next_track():
 def play_next_in_queue():
     return next_track()
 
+def advance_once():
+    """Play the next track after one has ended. Every loaded panel polls status, so only one poller may advance."""
+    lock_fd = os.open(ADVANCE_LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return False
+        # Another poller may have advanced between our look and the lock: ask mpv again
+        eof = send_mpv_cmd(["get_property", "eof-reached"])
+        if not eof or eof.get("data") is not True:
+            return False
+        res = next_track()
+        return bool(res and res.get("success"))
+    finally:
+        os.close(lock_fd)
+
 def save_now_playing(title, artist, url="", pos=0):
     try:
         cur = read_now_playing()
@@ -585,79 +610,135 @@ def read_now_playing():
     except Exception:
         return {}
 
-def send_mpv_cmd(cmd_list, timeout=1.0):
+def mpv_messages(sock, deadline):
+    buf = b""
+    while time.monotonic() < deadline:
+        sock.settimeout(max(0.001, deadline - time.monotonic()))
+        chunk = sock.recv(65536)
+        if not chunk:
+            return
+        buf += chunk
+        while b"\n" in buf:
+            line, buf = buf.split(b"\n", 1)
+            try:
+                obj = json.loads(line)
+            except (ValueError, UnicodeError):
+                continue
+            if isinstance(obj, dict):
+                yield obj
+
+def send_mpv_cmd(cmd_list, timeout=1.0, wait_for_load=False):
     global _MPV_REQ_ID
-    if not os.path.exists(SOCK_PATH):
-        return None
     _MPV_REQ_ID += 1
     req_id = _MPV_REQ_ID
+    entry_id = None
+    loading_id = None
+    deadline = time.monotonic() + timeout
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            sock.connect(SOCK_PATH)
+            payload = json.dumps({"command": cmd_list, "request_id": req_id}) + "\n"
+            sock.sendall(payload.encode("utf-8"))
+            for obj in mpv_messages(sock, deadline):
+                if obj.get("request_id") == req_id:
+                    if not wait_for_load or obj.get("error") != "success":
+                        return obj
+                    entry_id = (obj.get("data") or {}).get("playlist_entry_id")
+                    if entry_id is None:
+                        return {"error": "mpv did not identify the new playlist entry"}
+                elif wait_for_load:
+                    event = obj.get("event")
+                    event_id = obj.get("playlist_entry_id")
+                    if event == "start-file":
+                        loading_id = event_id
+                    elif event == "file-loaded" and entry_id is not None and loading_id == entry_id:
+                        return {"error": "success"}
+                    elif event == "end-file" and entry_id is not None and event_id == entry_id:
+                        reason = obj.get("reason")
+                        if reason == "redirect" and obj.get("playlist_insert_id"):
+                            entry_id = obj["playlist_insert_id"]
+                        elif reason in ("stop", "quit"):
+                            return {"error": "Playback interrupted", "interrupted": True}
+                        else:
+                            return {"error": obj.get("file_error") or "Stream ended before loading"}
+    except TimeoutError:
+        pass
+    except OSError:
+        return None
+    return {"error": "Track load timed out"} if wait_for_load else None
+
+def load_mpv_file(url, pos=0):
+    cmd = ["loadfile", url, "replace"]
+    if pos and int(pos) > 0:
+        cmd += [-1, {"start": str(int(pos))}]
+    return send_mpv_cmd(cmd, timeout=8.0, wait_for_load=True) or {"error": "mpv unreachable", "interrupted": True}
+
+def _drop_stale_socket():
+    # A socket nobody listens on is left over from an mpv that died
     try:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(timeout)
+        s.settimeout(0.1)
         s.connect(SOCK_PATH)
-        payload = json.dumps({"command": cmd_list, "request_id": req_id}) + "\n"
-        s.sendall(payload.encode("utf-8"))
-        deadline = time.time() + timeout
-        buf = ""
-        while True:
-            remaining = deadline - time.time()
-            if remaining <= 0:
-                try:
-                    s.close()
-                except Exception:
-                    pass
-                return None
-            s.settimeout(remaining)
-            try:
-                chunk = s.recv(65536).decode("utf-8", errors="replace")
-            except socket.timeout:
-                try:
-                    s.close()
-                except Exception:
-                    pass
-                return None
-            if not chunk:
-                try:
-                    s.close()
-                except Exception:
-                    pass
-                return None
-            buf += chunk
-            while "\n" in buf:
-                line, buf = buf.split("\n", 1)
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    obj = json.loads(line)
-                except Exception:
-                    continue
-                if isinstance(obj, dict) and obj.get("request_id") == req_id:
-                    try:
-                        s.close()
-                    except Exception:
-                        pass
-                    return obj
-    except Exception:
-        return None
+        s.close()
+    except (ConnectionRefusedError, FileNotFoundError):
+        try:
+            os.remove(SOCK_PATH)
+        except Exception:
+            pass
+    except OSError:
+        pass
 
 def is_mpv_running(timeout=0.2):
     if not os.path.exists(SOCK_PATH):
         return False
     res = send_mpv_cmd(["get_property", "idle-active"], timeout=timeout)
     if res is None:
-        try:
-            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            s.settimeout(0.1)
-            s.connect(SOCK_PATH)
-            s.close()
-        except (ConnectionRefusedError, FileNotFoundError):
-            try:
-                os.remove(SOCK_PATH)
-            except Exception:
-                pass
+        _drop_stale_socket()
         return False
     return res.get("error") == "success"
+
+def get_mpv_properties(names, timeout=1.0):
+    """Read several mpv properties over one connection: {name: reply}, missing on no reply.
+
+    None when mpv is not there. The status poll asks for eight properties; one connection
+    each made it open nine sockets a poll.
+    """
+    global _MPV_REQ_ID
+    if not os.path.exists(SOCK_PATH):
+        return None
+    ids = {}
+    for name in names:
+        _MPV_REQ_ID += 1
+        ids[_MPV_REQ_ID] = name
+    payload = "".join(json.dumps({"command": ["get_property", n], "request_id": i}) + "\n"
+                      for i, n in ids.items())
+    replies = {}
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            sock.connect(SOCK_PATH)
+            sock.sendall(payload.encode("utf-8"))
+            for obj in mpv_messages(sock, time.monotonic() + timeout):
+                name = ids.get(obj.get("request_id"))
+                if name is not None:
+                    replies[name] = obj
+                    if len(replies) == len(ids):
+                        break
+    except TimeoutError:
+        pass
+    except OSError:
+        _drop_stale_socket()
+        return None
+    return replies
+
+def _spectrum_python():
+    # The visualizer costs about 2 ms a frame with NumPy and 15 ms without. The interpreter
+    # running this can be a version manager's (mise, pyenv) that lacks it while the system one has it.
+    import importlib.util
+    if importlib.util.find_spec("numpy") is None and os.access("/usr/bin/python3", os.X_OK):
+        return "/usr/bin/python3"
+    return sys.executable or "python3"
 
 def start_spectrum_daemon():
     if os.path.exists(SPECTRUM_PID_FILE):
@@ -676,7 +757,7 @@ def start_spectrum_daemon():
             pass
     try:
         spec_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spectrum.py")
-        proc = subprocess.Popen(["python3", spec_script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        proc = subprocess.Popen([_spectrum_python(), spec_script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         save_tracked_proc(SPECTRUM_PID_FILE, proc.pid, signature="spectrum.py")
     except Exception:
         pass
@@ -818,6 +899,7 @@ def delete_playlist(name):
     return {"success": True}
 
 def import_playlist(url, custom_name=None):
+    import urllib.request
     if not url or not is_safe_url(url):
         return {"success": False, "error": "Invalid or unsafe URL"}
 
@@ -1061,7 +1143,10 @@ def get_dominant_color(img_path):
 
 def get_status(allow_advance=True):
     cur_eq = get_current_eq()
-    if not is_mpv_running():
+    props = get_mpv_properties(["idle-active", "time-pos", "duration", "pause", "media-title",
+                                "volume", "speed", "eof-reached"])
+    idle_res = props.get("idle-active") if props is not None else None
+    if not idle_res or idle_res.get("error") != "success":
         return {
             "running": False,
             "state": "stopped",
@@ -1084,25 +1169,21 @@ def get_status(allow_advance=True):
         }
 
     try:
-        np = read_now_playing()
-        pos_res = send_mpv_cmd(["get_property", "time-pos"])
-        dur_res = send_mpv_cmd(["get_property", "duration"])
-        pause_res = send_mpv_cmd(["get_property", "pause"])
-        title_res = send_mpv_cmd(["get_property", "media-title"])
-        vol_res = send_mpv_cmd(["get_property", "volume"])
-        speed_res = send_mpv_cmd(["get_property", "speed"])
-        idle_res = send_mpv_cmd(["get_property", "idle-active"])
+        pos_res = props.get("time-pos")
+        dur_res = props.get("duration")
+        pause_res = props.get("pause")
+        title_res = props.get("media-title")
+        vol_res = props.get("volume")
+        speed_res = props.get("speed")
 
-        is_idle = idle_res.get("data") is True if idle_res else False
+        is_idle = idle_res.get("data") is True
         is_paused = pause_res.get("data") is True if pause_res else False
-        eof_res = send_mpv_cmd(["get_property", "eof-reached"])
+        eof_res = props.get("eof-reached")
         is_eof = eof_res.get("data") is True if eof_res else False
         any_ok = any(r is not None for r in (pos_res, dur_res, pause_res, title_res, vol_res, speed_res, idle_res, eof_res))
 
-        if allow_advance and is_eof and (is_idle or is_paused):
-            res = next_track()
-            if res and res.get("success"):
-                return get_status(allow_advance=allow_advance)
+        if allow_advance and is_eof and (is_idle or is_paused) and advance_once():
+            return get_status(allow_advance=allow_advance)
         if is_idle:
             state = "stopped"
         elif is_paused:
@@ -1142,14 +1223,10 @@ def get_status(allow_advance=True):
                 if os.path.exists(thumb_f):
                     art_path = thumb_f
                 else:
+                    # Playing a track caches its thumbnail (save_youtube_meta). A download
+                    # started here never finished: the thread died when this one-shot command
+                    # exited, a few milliseconds later, on every poll.
                     art_path = f"https://img.youtube.com/vi/{vid_id}/mqdefault.jpg"
-                    import threading
-                    def _dl_th(v, p):
-                        try:
-                            urllib.request.urlretrieve(f"https://img.youtube.com/vi/{v}/mqdefault.jpg", p)
-                        except Exception:
-                            pass
-                    threading.Thread(target=_dl_th, args=(vid_id, thumb_f), daemon=True).start()
             elif os.path.isabs(os.path.expanduser(np_url)) and os.path.exists(os.path.expanduser(np_url)):
                 folder = os.path.dirname(os.path.expanduser(np_url))
                 for cover_name in ("cover.jpg", "cover.png", "folder.jpg", "folder.png", "album.jpg", "art.jpg"):
@@ -1225,6 +1302,7 @@ def get_status(allow_advance=True):
 
 def resolve_spotify_url(url):
     """Resolve Spotify track URL to title, artist, and search query using Spotify oEmbed."""
+    import urllib.request
     try:
         if "spotify.com/track/" in url:
             oembed_url = f"https://open.spotify.com/oembed?url={urllib.parse.quote(url)}"
@@ -1239,58 +1317,64 @@ def resolve_spotify_url(url):
 
 def search_youtube_innertube(query, limit=10):
     """Ultra-fast direct YouTube InnerTube search API bypassing yt-dlp child process overhead."""
+    import urllib.request
     if not query:
         return []
     url = "https://www.youtube.com/youtubei/v1/search"
-    payload = {
-        "context": {
-            "client": {
-                "clientName": "WEB",
-                "clientVersion": "2.20240101.01.00",
-                "hl": "en",
-                "gl": "US"
-            }
-        },
-        "query": query
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    context = {
+        "client": {
+            "clientName": "WEB",
+            "clientVersion": "2.20240101.01.00",
+            "hl": "en",
+            "gl": "US"
         }
-    )
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    }
+    results = []
+    seen = set()
+    payload = {"context": context, "query": query}
     try:
-        with urllib.request.urlopen(req, timeout=3.5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        results = []
-        sections = data.get("contents", {}).get("twoColumnSearchResultsRenderer", {}).get("primaryContents", {}).get("sectionListRenderer", {}).get("contents", [])
-        for s in sections:
-            items = s.get("itemSectionRenderer", {}).get("contents", [])
-            for it in items:
-                v = it.get("videoRenderer")
-                if v:
-                    vid = v.get("videoId")
-                    if not vid: continue
-                    title = v.get("title", {}).get("runs", [{}])[0].get("text", "")
-                    artist = v.get("ownerText", {}).get("runs", [{}])[0].get("text", "")
-                    dur = v.get("lengthText", {}).get("simpleText", "")
-                    thumbs = v.get("thumbnail", {}).get("thumbnails", [])
-                    thumb_url = thumbs[-1].get("url", "") if thumbs else f"https://img.youtube.com/vi/{vid}/mqdefault.jpg"
-                    results.append({
-                        "id": vid,
-                        "url": f"https://www.youtube.com/watch?v={vid}",
-                        "title": title,
-                        "artist": artist,
-                        "duration": dur,
-                        "thumb": thumb_url
-                    })
-                    if len(results) >= limit: break
-            if len(results) >= limit: break
-        return results
+        # A page holds about 20 videos; the continuation token leads to the next one.
+        # shortcut: "show more" starts again from page 1 (about 1s a page), keep the token between calls if that gets slow
+        for _ in range(5):
+            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
+            with urllib.request.urlopen(req, timeout=3.5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            sections = data.get("contents", {}).get("twoColumnSearchResultsRenderer", {}).get("primaryContents", {}).get("sectionListRenderer", {}).get("contents", [])
+            for cmd in data.get("onResponseReceivedCommands", []):
+                sections = sections + cmd.get("appendContinuationItemsAction", {}).get("continuationItems", [])
+            token = None
+            for s in sections:
+                token = s.get("continuationItemRenderer", {}).get("continuationEndpoint", {}).get("continuationCommand", {}).get("token") or token
+                items = s.get("itemSectionRenderer", {}).get("contents", [])
+                for it in items:
+                    v = it.get("videoRenderer")
+                    if v:
+                        vid = v.get("videoId")
+                        if not vid or vid in seen: continue
+                        seen.add(vid)
+                        title = v.get("title", {}).get("runs", [{}])[0].get("text", "")
+                        artist = v.get("ownerText", {}).get("runs", [{}])[0].get("text", "")
+                        dur = v.get("lengthText", {}).get("simpleText", "")
+                        thumbs = v.get("thumbnail", {}).get("thumbnails", [])
+                        thumb_url = thumbs[-1].get("url", "") if thumbs else f"https://img.youtube.com/vi/{vid}/mqdefault.jpg"
+                        results.append({
+                            "id": vid,
+                            "url": f"https://www.youtube.com/watch?v={vid}",
+                            "title": title,
+                            "artist": artist,
+                            "duration": dur,
+                            "thumb": thumb_url
+                        })
+            if len(results) >= limit or not token:
+                break
+            payload = {"context": context, "continuation": token}
     except Exception:
-        return []
+        pass
+    return results[:limit]
 
 def search_tracks(query, limit=10):
     if not query or not query.strip():
@@ -1462,6 +1546,7 @@ os.makedirs(LYRICS_DIR, mode=0o700, exist_ok=True)
 
 LYRICS_CACHE = {}
 def fetch_lyrics(title, artist, url=""):
+    import urllib.request
     raw_t = (title or "").strip()
     raw_a = (artist or "").strip()
     if not raw_t or raw_t in ("Omaramp", "omaramp_stream", "No track loaded"):
@@ -1478,8 +1563,10 @@ def fetch_lyrics(title, artist, url=""):
         try:
             with open(disk_cache, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                LYRICS_CACHE[key] = data
-                return data
+                # Older versions wrote empty results after connection failures.
+                if isinstance(data, dict) and (data.get("synced") or data.get("plain")):
+                    LYRICS_CACHE[key] = data
+                    return data
         except Exception:
             pass
 
@@ -1501,9 +1588,12 @@ def fetch_lyrics(title, artist, url=""):
             u = f"https://lrclib.net/api/search?q={urllib.parse.quote(search_query)}"
             req = urllib.request.Request(u, headers={"User-Agent": "Omaramp/1.0 (Linux)"})
             with urllib.request.urlopen(req, timeout=2.5) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+                reply = resp.read(2_000_001)
+                if len(reply) <= 2_000_000:
+                    data = json.loads(reply)
         except Exception:
             pass
+        data = [e for e in data if isinstance(e, dict)] if isinstance(data, list) else []
 
         # Strategy 2: Structured get if search returned nothing
         if not data and clean_a and clean_t:
@@ -1511,32 +1601,36 @@ def fetch_lyrics(title, artist, url=""):
                 u = f"https://lrclib.net/api/get?artist_name={urllib.parse.quote(clean_a)}&track_name={urllib.parse.quote(clean_t)}"
                 req = urllib.request.Request(u, headers={"User-Agent": "Omaramp/1.0 (Linux)"})
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
-                    item = json.loads(resp.read().decode("utf-8"))
-                    if item:
+                    reply = resp.read(200_001)
+                    item = json.loads(reply) if len(reply) <= 200_000 else None
+                    if isinstance(item, dict):
                         data = [item]
             except Exception:
                 pass
 
         result = {"synced": "", "plain": "", "source": ""}
-        if isinstance(data, list):
-            for e in data:
-                if e.get("syncedLyrics"):
-                    result = {"synced": e["syncedLyrics"], "plain": e.get("plainLyrics", ""), "source": "lrclib"}
-                    break
-            if not result["synced"]:
-                for e in data:
-                    if e.get("plainLyrics"):
-                        result = {"synced": "", "plain": e["plainLyrics"], "source": "lrclib"}
-                        break
+        def lyric_text(value):
+            return value if isinstance(value, str) and len(value) <= 100_000 and value.strip() else ""
 
-        LYRICS_CACHE[key] = result
-        atomic_write_json(disk_cache, result)
+        for e in data:
+            synced = lyric_text(e.get("syncedLyrics"))
+            plain = lyric_text(e.get("plainLyrics"))
+            if synced or (plain and not result["plain"]):
+                result = {"synced": synced, "plain": plain, "source": "lrclib"}
+            if synced:
+                break
+
+        # A timeout, an empty result, or an API error all remain retryable.
+        if result["synced"] or result["plain"]:
+            LYRICS_CACHE[key] = result
+            atomic_write_json(disk_cache, result)
         return result
     except Exception:
         return {"synced": "", "plain": "", "source": ""}
 
 def save_youtube_meta(url, title, artist):
     """Save title/artist metadata and fetch thumbnail so get_status can show the real track name + art."""
+    import urllib.request
     vid_id = ""
     m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", url)
     if m:
@@ -1547,10 +1641,21 @@ def save_youtube_meta(url, title, artist):
         # Fetch thumbnail (mqdefault.jpg = 320x180, good quality for small UI)
         thumb_f = os.path.join(AUDIO_CACHE_DIR, f"{vid_id}.jpg")
         if not os.path.exists(thumb_f):
+            # Bounded in time and size, and renamed into place only when complete, so a stalled
+            # network cannot hold up playback and a cut-off download is never kept as the art.
+            tmp_f = f"{thumb_f}.{os.getpid()}.part"
             try:
-                urllib.request.urlretrieve(f"https://img.youtube.com/vi/{vid_id}/mqdefault.jpg", thumb_f)
+                with urllib.request.urlopen(f"https://img.youtube.com/vi/{vid_id}/mqdefault.jpg", timeout=4.0) as resp:
+                    data = resp.read(2_000_001)
+                if 0 < len(data) <= 2_000_000:
+                    with open(tmp_f, "wb") as f:
+                        f.write(data)
+                    os.replace(tmp_f, thumb_f)
             except Exception:
-                pass
+                try:
+                    os.remove(tmp_f)
+                except OSError:
+                    pass
 
 def resolve_youtube_stream_url(url, force_refresh=False):
     """Resolve direct HTTPS stream URL for YouTube audio with smart caching and auto-invalidation."""
@@ -1562,14 +1667,17 @@ def resolve_youtube_stream_url(url, force_refresh=False):
             return cached
     try:
         r = subprocess.run([
-            "yt-dlp", "--no-warnings",
+            # TLS verification is the default. Ignore config so a user-wide
+            # --no-check-certificates setting cannot disable it for this call.
+            "yt-dlp", "--no-warnings", "--ignore-config",
             "--extractor-args", "youtube:player_client=android,web",
             "-f", "bestaudio[ext=m4a]/bestaudio/18/best",
-            "--no-check-certificates",
             "--no-playlist",
             "-g", "--", url
         ], capture_output=True, text=True, timeout=8)
-        lines = [l.strip() for l in r.stdout.splitlines() if l.strip().startswith("http")]
+        if r.returncode != 0:
+            return None
+        lines = [line.strip() for line in r.stdout.splitlines() if line.strip().startswith("https://")]
         if lines:
             direct_url = lines[-1]
             set_cached_stream_url(url, direct_url)
@@ -1648,47 +1756,40 @@ def play_item(url, title=None, artist=None, pos=0, record_prev=True):
         return {"success": False, "error": "Unable to resolve track"}
     if not start_mpv_daemon():
         return {"success": False, "error": "mpv failed to start"}
-    start_spectrum_daemon()
-    
-    if record_prev:
-        cur_np = read_now_playing()
-        if cur_np.get("url") and cur_np.get("url") != real_url:
-            push_prev_stack(cur_np)
 
+    cur_np = read_now_playing()
     display_title = title if (title and str(title).strip()) else final_title
     display_artist = artist if (artist and str(artist).strip()) else final_artist
 
+    res = None
+    warning = None
+    if is_youtube_url(real_url):
+        cached = get_cached_stream_url(real_url)
+        direct = cached or resolve_youtube_stream_url(real_url)
+        if direct:
+            res = load_mpv_file(direct, pos)
+            if res.get("error") != "success" and not res.get("interrupted"):
+                invalidate_stream_cache(real_url, direct)
+                if cached:
+                    fresh = resolve_youtube_stream_url(real_url, force_refresh=True)
+                    if fresh:
+                        res = load_mpv_file(fresh, pos)
+                        if res.get("error") != "success" and not res.get("interrupted"):
+                            invalidate_stream_cache(real_url, fresh)
+        if res is None or (res.get("error") != "success" and not res.get("interrupted")):
+            warning = "Direct stream unavailable; using the YouTube watch URL"
+            res = load_mpv_file(real_url, pos)
+    else:
+        res = load_mpv_file(real_url, pos)
+    if res.get("error") != "success":
+        return {"success": False, "error": res["error"]}
+
+    if record_prev and cur_np.get("url") and cur_np["url"] != real_url:
+        push_prev_stack(cur_np)
     record_history(display_title, display_artist, real_url, 0)
     save_now_playing(display_title, display_artist, real_url, pos)
-    
-    stream_target = real_url
-    warning = None
-    is_yt = is_youtube_url(real_url)
-    if is_yt:
-        save_youtube_meta(real_url, display_title, display_artist)
-        direct_url = resolve_youtube_stream_url(real_url)
-        if direct_url:
-            stream_target = direct_url
-        else:
-            stream_target = real_url
-            warning = "direct stream unavailable, trying watch URL"
-
-    load_opts = {}
-    if pos and int(pos) > 0:
-        load_opts["start"] = str(int(pos))
-
-    if load_opts:
-        res = send_mpv_cmd(["loadfile", stream_target, "replace", -1, load_opts])
-    else:
-        res = send_mpv_cmd(["loadfile", stream_target, "replace"])
-    if not res or res.get("error") != "success":
-        err = res.get("error") if isinstance(res, dict) and res.get("error") else "mpv load failed"
-        return {"success": False, "error": err}
-
     if display_title:
         send_mpv_cmd(["set_property", "force-media-title", display_title])
-    import threading
-    threading.Thread(target=fetch_lyrics, args=(display_title, display_artist, real_url), daemon=True).start()
     _spawn_detached("prefetch_next")
     unpause_res = send_mpv_cmd(["set_property", "pause", False])
     if not unpause_res or unpause_res.get("error") != "success":
@@ -1696,6 +1797,8 @@ def play_item(url, title=None, artist=None, pos=0, record_prev=True):
         unpause_res = send_mpv_cmd(["set_property", "pause", False])
         if not unpause_res or unpause_res.get("error") != "success":
             return {"success": False, "error": "mpv stuck paused"}
+    if is_youtube_url(real_url):
+        save_youtube_meta(real_url, display_title, display_artist)
     out = {"success": True}
     if warning:
         out["warning"] = warning
@@ -1773,8 +1876,18 @@ if __name__ == "__main__":
     elif action == "get_fx":
         print(json.dumps(get_audio_fx()))
     elif action == "search":
-        q = " ".join(sys.argv[2:]) if len(sys.argv) > 2 else ""
-        print(json.dumps(search_tracks(q, 10)))
+        args = sys.argv[2:]
+        lim = 10
+        if args and args[0].startswith("--limit="):
+            try:
+                lim = max(1, min(50, int(args[0].split("=", 1)[1])))
+            except ValueError:
+                pass
+            args = args[1:]
+        found = search_tracks(" ".join(args), lim)
+        # play_playlist "Search Results" plays from this list
+        atomic_write_json(LAST_SEARCH_PATH, found)
+        print(json.dumps(found))
     elif action == "prefetch_url":
         u = sys.argv[2] if len(sys.argv) > 2 else ""
         print(json.dumps(prefetch_url_action(u)))
@@ -1924,7 +2037,6 @@ if __name__ == "__main__":
         print(json.dumps(clear_queue()))
     elif action == "start_daemon":
         mpv_ok = start_mpv_daemon()
-        start_spectrum_daemon()
         print(json.dumps({"success": mpv_ok, "running": is_mpv_running()}))
     elif action == "stop_daemon":
         print(json.dumps(stop_daemon()))

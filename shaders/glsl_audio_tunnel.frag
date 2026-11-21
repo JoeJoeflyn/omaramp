@@ -24,8 +24,8 @@ void main() {
     // Depth projection
     float depth = 0.35 / max(0.01, r);
     
-    // Travel velocity directly tracks audio energy and beat onsets
-    float t = u_time * (0.8 + u_bass * 1.8 + u_beat * 2.0);
+    // QML integrates travel velocity; changing the bass cannot rephase old time.
+    float t = u_time;
     
     vec2 tunnelUV = vec2(a * 4.0 / 3.14159, depth + t);
     
@@ -46,5 +46,5 @@ void main() {
     // Depth fog
     col *= clamp(r * 1.8, 0.0, 1.0);
     
-    fragColor = vec4(col, 0.95) * qt_Opacity;
+    fragColor = vec4(clamp(col, 0.0, 1.0), 1.0) * qt_Opacity;
 }

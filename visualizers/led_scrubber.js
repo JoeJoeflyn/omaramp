@@ -9,21 +9,15 @@ function render(ctx, d) {
   var beatDrop = d.beatDrop || 0
   var midY = h / 2.0
 
-  // 44 segmented LED columns
-  var numCols = 44
+  var layout = H.fitColumns(w, 44, 2.5, 2.5)
+  var numCols = layout.count, colW = layout.width
   var resampled = H.resampleBandsLinear(bands, numCols)
-
-  var margin = 6
-  var totalDrawW = w - margin * 2
-  var gap = 2.5
-  var colW = Math.max(2.5, (totalDrawW - (numCols - 1) * gap) / numCols)
-  var actualW = numCols * colW + (numCols - 1) * gap
-  var startX = margin + (totalDrawW - actualW) / 2.0
 
   // LED block metrics (11 vertical segments per column)
   var numSegs = 11
-  var segH = 2.4
-  var segGap = 1.4
+  var rowScale = Math.min(1, h / 44)
+  var segH = 2.4 * rowScale
+  var segGap = 1.4 * rowScale
   var totalMatrixH = numSegs * segH + (numSegs - 1) * segGap
   var matrixStartY = midY - (totalMatrixH / 2.0)
 
@@ -43,13 +37,13 @@ function render(ctx, d) {
   ]
 
   for (var col = 0; col < numCols; col++) {
-    var cx = startX + col * (colW + gap)
+    var cx = layout.left + col * (colW + layout.gap)
 
     // Track dynamic profile envelope
     var env = Math.sin((col / numCols) * Math.PI)
     var shapeVal = 0.20 + env * 0.45 + Math.sin(col * 0.8) * 0.15
     var energy = isPlaying ? (resampled[col] || 0) : 0.0
-    var kick = (col >= 2 && col <= 12) ? (beatDrop * 0.25) : 0.0
+    var kick = col / numCols < 0.29 ? beatDrop * 0.25 : 0.0
 
     // Number of active illuminated segments (1 to 5 outward from center)
     var norm = Math.min(1.0, shapeVal * 0.40 + energy * 0.65 + kick)

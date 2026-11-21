@@ -29,6 +29,7 @@ function render(ctx, d) {
 
   // Controlled musical tunnel velocity
   var speed = 0.006 + (totalEnergy * 0.012) + (beatDrop * 0.015)
+  var travel = H.advancePhase(d.state, "tunnelPhase", frame, speed)
   var ringCount = 8
   var numSides = 8
   var rotBase = frame * 0.005
@@ -50,7 +51,7 @@ function render(ctx, d) {
 
   // 2. Draw Moving Concentric Perspective Rings
   for (var i = 0; i < ringCount; i++) {
-    var z = ((i / ringCount) + (frame * speed)) % 1.0
+    var z = (i / ringCount + travel) % 1.0
     var scale = Math.pow(z, 2.0)
     if (scale < 0.03) continue
 
@@ -58,8 +59,9 @@ function render(ctx, d) {
     var bVal = bands[bandIndex] || 0.0
     var ringAudioPulse = 1.0 + (bVal * 0.25) + (beatDrop * 0.20)
 
-    var rx = (w * 0.42) * scale * ringAudioPulse
-    var ry = (h * 0.42) * scale * ringAudioPulse
+    var radius = Math.min(0.44, 0.32 * scale * ringAudioPulse)
+    var rx = w * radius
+    var ry = h * radius
     var ringRot = rotBase + (1.0 - z) * 0.3
 
     var alpha = Math.min(1.0, scale * 1.4) * (0.35 + bVal * 0.45 + beatDrop * 0.20)

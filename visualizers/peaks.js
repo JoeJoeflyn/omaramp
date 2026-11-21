@@ -13,7 +13,7 @@ function render(ctx, d) {
   var peakPos = s.peakPos, peakVel = s.peakVel, peakHold = s.peakHold
   var dt = 0.016, gravity = 9.5, launchBase = 0.8, launchGain = 1.4, launchMax = 1.7, apexHold = 0.08
   for (var p = 0; p < count; p++) {
-    var px = p * (barW + gap)
+    var px = d.x0 + p * (barW + gap)
     var level = d.playing ? (bands[p] || 0) : 0
     if (peakVel[p] === 0 && peakPos[p] <= level + 0.01) {
       if (level > peakPos[p]) {

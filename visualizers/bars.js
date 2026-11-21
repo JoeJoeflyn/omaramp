@@ -7,7 +7,7 @@ function render(ctx, d) {
   for (var i = 0; i < count; i++) {
     var level = d.playing ? (bands[i] || 0) : 0
     var barH = Math.round(level * h)
-    var x = i * (barW + gap)
+    var x = d.x0 + i * (barW + gap)
     for (var y = 0; y < barH; y++) {
       var rowNorm = y / h
       ctx.fillStyle = H.specColor(rowNorm)

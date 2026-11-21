@@ -9,16 +9,9 @@ function render(ctx, d) {
   var beatDrop = d.beatDrop || 0
   var midY = h / 2.0
 
-  // 56 rounded capsule pills
-  var numPills = 56
+  var layout = H.fitColumns(w, 56, 2.4, 2.4)
+  var numPills = layout.count, pillW = layout.width
   var resampled = H.resampleBandsLinear(bands, numPills)
-
-  var margin = 6
-  var totalDrawW = w - margin * 2
-  var gap = 2.4
-  var pillW = Math.max(2.4, (totalDrawW - (numPills - 1) * gap) / numPills)
-  var actualW = numPills * pillW + (numPills - 1) * gap
-  var startX = margin + (totalDrawW - actualW) / 2.0
 
   // Dynamic accent color
   var acc = d.accent
@@ -37,15 +30,16 @@ function render(ctx, d) {
 
   // Draw 56 fully-filled vibrant micro-capsule pills
   for (var i = 0; i < numPills; i++) {
-    var px = startX + i * (pillW + gap)
+    var px = layout.left + i * (pillW + layout.gap)
 
     // Dynamic amplitude profile envelope
     var env = Math.sin((i / numPills) * Math.PI)
     var shapeVal = 0.18 + env * 0.48 + Math.sin(i * 0.85 + 0.3) * 0.14
     var energy = isPlaying ? (resampled[i] || 0) : 0.0
-    var kick = (i >= 2 && i <= 12) ? (beatDrop * 0.22) : 0.0
+    var kick = i / numPills < 0.24 ? beatDrop * 0.22 : 0.0
 
-    var pillH = Math.max(pillW, ((shapeVal * 0.38) + (energy * 0.64) + kick) * (h * 0.86))
+    var norm = Math.min(1, shapeVal * 0.38 + energy * 0.64 + kick)
+    var pillH = Math.min(h * 0.9, Math.max(pillW, norm * h * 0.86))
     var py = midY - (pillH / 2.0)
     var r = pillW / 2.0
 

@@ -10,12 +10,13 @@ function render(ctx, d) {
   var total = 0
   for (var i = 0; i < count; i++) total += (bands[i] || 0)
   var avg = total / count
-  // Shockwave
-  var shockPhase = (frame * 0.10) % 1.0
+  // One expanding ring per detected beat, rather than a constantly restarting timer.
+  if (d.beatDrop === 1) d.state.shockFrame = frame
+  var shockPhase = d.state.shockFrame === undefined ? 1 : Math.min(1, (frame - d.state.shockFrame) / 10)
   var shockR = maxR * (0.3 + 0.7 * shockPhase)
-  var shockStrength = avg * avg * (1.0 - shockPhase * shockPhase)
+  var shockStrength = d.playing ? 0.45 * (1.0 - shockPhase * shockPhase) : 0
   var breath = Math.sin(frame * 0.05) * 0.02
-  var rotOffset = frame * (0.015 + avg * 0.04)
+  var rotOffset = H.advancePhase(d.state, "pulsePhase", frame, 0.015 + avg * 0.04)
   var twoPi = 2 * Math.PI
   var bandScale = count / twoPi
   for (var py = 0; py < h; py += 2) {

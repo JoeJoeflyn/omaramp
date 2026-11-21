@@ -25,10 +25,8 @@ BorderSurface {
     { id: "siriwave", name: "Siri Wave", category: "scope", icon: "\uf179" },
     { id: "soundcloud_wave", name: "SoundCloud Wave", category: "scope", icon: "\uf1be" },
     { id: "telegram_wave", name: "Telegram Wave", category: "scope", icon: "\uf130" },
-    { id: "daw_wave", name: "DAW Peak Wave", category: "scope", icon: "\uf080" },
     { id: "led_scrubber", name: "LED Scrubber", category: "scope", icon: "\uf009" },
     { id: "heatmap_wave", name: "Heatmap Wave", category: "scope", icon: "\uf06d" },
-    { id: "grounded_wave", name: "Baseline Wave", category: "scope", icon: "\uf012" },
     { id: "wave", name: "Waveform", category: "scope", icon: "\uf21e" },
     { id: "scope", name: "XY Scope", category: "scope", icon: "\uf1fe" },
     { id: "sine", name: "Sine Wave", category: "scope", icon: "\uf1d8" },
@@ -40,7 +38,6 @@ BorderSurface {
     { id: "pulse", name: "Pulse", category: "retro", icon: "\uf111" },
     { id: "matrix", name: "Matrix", category: "retro", icon: "\uf108" },
     { id: "terrain", name: "Terrain", category: "retro", icon: "\uf06e" },
-    { id: "binary", name: "Binary", category: "retro", icon: "\uf120" },
     { id: "logo", name: "Logo", category: "retro", icon: "\uf005" },
     { id: "mosaic", name: "Mosaic", category: "retro", icon: "\uf009" },
 
@@ -59,7 +56,6 @@ BorderSurface {
     { id: "glsl_plasma", name: "GPU Plasma (GLSL)", category: "3d", icon: "\uf043" },
     { id: "glsl_audio_tunnel", name: "GPU Wormhole (GLSL)", category: "3d", icon: "\uf135" },
     { id: "glsl_electric_sphere", name: "GPU Lightning Orb (GLSL)", category: "3d", icon: "\uf0e7" },
-    { id: "plasma", name: "Liquid Plasma (2D)", category: "3d", icon: "\uf043" },
     { id: "osc_warp", name: "Oscilloscope Warp", category: "3d", icon: "\uf1fe" },
     { id: "crt_scanline", name: "CRT Radar Scope", category: "3d", icon: "\uf26c" },
     { id: "cyber_tunnel", name: "3D Cyber Tunnel", category: "3d", icon: "\uf135" }

@@ -33,6 +33,7 @@ function render(ctx, d) {
 
   ctx.beginPath()
   ctx.arc(cx, cy, scopeRadius, 0, Math.PI * 2)
+  ctx.moveTo(cx + scopeRadius * 0.5, cy)
   ctx.arc(cx, cy, scopeRadius * 0.5, 0, Math.PI * 2)
   ctx.stroke()
 
@@ -56,7 +57,7 @@ function render(ctx, d) {
   var numPoints = 64
   var points = []
   var waveLen = wave.length
-  var phase = frame * (0.02 + totalEnergy * 0.03)
+  var phase = H.advancePhase(d.state, "scanPhase", frame, 0.02 + totalEnergy * 0.03)
 
   for (var i = 0; i <= numPoints; i++) {
     var theta = (i / numPoints) * Math.PI * 2.0
@@ -74,9 +75,9 @@ function render(ctx, d) {
       waveValY = Math.cos(theta * 1.5 - phase * 0.8) * bAmp
     }
 
-    var rDeflect = scopeRadius * (0.60 + bass * 0.30 + beatDrop * 0.20)
-    var px = cx + Math.cos(theta) * rDeflect + (waveValX * (scopeRadius * 0.40))
-    var py = cy + Math.sin(theta) * (rDeflect * 0.80) + (waveValY * (scopeRadius * 0.35))
+    var rDeflect = scopeRadius * (0.50 + bass * 0.18 + beatDrop * 0.12)
+    var px = cx + Math.cos(theta) * rDeflect + waveValX * scopeRadius * 0.24
+    var py = cy + Math.sin(theta) * rDeflect + waveValY * scopeRadius * 0.24
     points.push({ x: px, y: py })
   }
 
@@ -101,6 +102,8 @@ function render(ctx, d) {
   ctx.stroke()
 
   // 4. Side Vector Spectrum Meters
+  // Leave enough room for the radar and two meters without overlap.
+  if (w / 2 - scopeRadius < 60) return
   var meterBars = 6
   var barW = 3
   for (var side = -1; side <= 1; side += 2) {

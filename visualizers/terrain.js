@@ -18,13 +18,17 @@ function render(ctx, d) {
   var noise = H.scatterHash(0, 0, w - 1, Math.floor(frame / 3)) * 0.15
   buf[w - 1] = d.playing ? Math.max(0.02, avg + noise - 0.05) : Math.max(0.0, buf[w - 1] * 0.9 - 0.01)
 
-  // Render filled terrain (green valleys, yellow slopes, red peaks)
-  for (var x2 = 0; x2 < w; x2++) {
-    var ty = h - 1 - Math.floor(buf[x2] * (h - 1))
-    for (var y = ty; y < h; y++) {
-      var norm = (h - 1 - y) / h
-      ctx.fillStyle = H.specColor(norm)
-      ctx.fillRect(x2, y, 1, 1)
+  // Render filled terrain (green valleys, yellow slopes, red peaks).
+  // One path per colour band: a rect per pixel cost thousands of calls a frame.
+  var edges = [0, Math.floor(h - 1 - 0.6 * h) + 1, Math.floor(h - 1 - 0.3 * h) + 1, h]
+  var norms = [0.6, 0.3, 0]
+  for (var t = 0; t < 3; t++) {
+    ctx.fillStyle = H.specColor(norms[t])
+    ctx.beginPath()
+    for (var x2 = 0; x2 < w; x2++) {
+      var top = Math.max(edges[t], h - 1 - Math.floor(buf[x2] * (h - 1)))
+      if (top < edges[t + 1]) ctx.rect(x2, top, 1, edges[t + 1] - top)
     }
+    ctx.fill()
   }
 }
