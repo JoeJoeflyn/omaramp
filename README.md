@@ -33,8 +33,8 @@ Inspired by Winamp & [cliamp](https://github.com/brianstrauch/cliamp).
 - **Plays on from any list**: Next, Previous and auto-play walk the list a song was started from: a playlist, the search results or Recents.
 - **Full Transport Deck**: Play/Pause, Next, Prev, Stop, Shuffle, Repeat, Volume slider, and Speed controls (0.5x–2.0x).
 - **Keyboard Shortcuts**: `Space` (play/pause), `Left`/`Right` (seek), `Up`/`Down` (volume), `/` (search), `m` (mute), `Esc` (close).
-- **Spectrum capture**: Uses the default audio output’s monitor while the panel is open. Pausing or losing fresh audio frames clears the visualizer.
-- **Status Bar Widget**: Can display an elided track title on horizontal bars. Full track details remain in the tooltip.
+- **Spectrum capture**: Uses the default audio output’s monitor while playing or while the panel is open. Pausing or losing fresh audio frames clears the visualizer.
+- **Status Bar Widget**: The bar button is a waveform: it shows the selected visualizer during playback, even with the popup closed. A stationary waveform stays visible when paused, stopped, or waiting for audio. It can also display an elided track title on horizontal bars. Full track details remain in the tooltip.
   - **Left Click**: Toggle popup player panel.
   - **Middle Click**: Instant Play/Pause toggle.
   - **Right Click**: Skip to next track.

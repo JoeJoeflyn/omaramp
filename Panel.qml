@@ -80,7 +80,6 @@ Panel {
   property double _lastSpectrumAt: 0
   property var visWave: []
   property int visFrame: 0
-  property var _visState: ({})
   property var resumeInfo: null
   property bool resumeVisible: false
   property var activePlaylist: null
@@ -104,7 +103,7 @@ Panel {
   onIsPlayingChanged: resetSpectrum()
   onCurrentUrlChanged: resetSpectrum()
 
-  // The spectrum feeds the panel's visualizer and the bar icon's equalizer, so it runs while
+  // The spectrum feeds both visualizers, so it runs while
   // music plays or the panel is open. It stops a few seconds after neither holds, so a track
   // change (playing, then buffering, then playing) does not restart it.
   readonly property bool spectrumWanted: opened || isPlaying
@@ -124,7 +123,6 @@ Panel {
   }
 
   onOpenedChanged: {
-    root._visState = ({})
     if (opened) {
       if (playerComp) playerComp.requestPaint()
       // Pre-warm mpv so it's ready before the user clicks a song.
@@ -866,7 +864,6 @@ Panel {
     root.visBands = root._silentBands
     root.visWave = []
     root.visLR = [0, 0]
-    root._visState = ({})
     if (playerComp) playerComp.requestPaint()
   }
 
@@ -882,8 +879,6 @@ Panel {
       root._lastSpectrumAt = at
       root.visBands = data.bands.map(v => clamp(v, 0))
       root.visActive = true
-      // With the panel closed only the bar icon's equalizer reads the bands
-      if (!root.opened) return
       root.visWave = Array.isArray(data.wave) ? data.wave.slice(0, 128).map(v => clamp(v, -1)) : []
       root.visLR = Array.isArray(data.lr) ? data.lr.slice(0, 2).map(v => clamp(v, 0)) : [0, 0]
       root.visFrame++

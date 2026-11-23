@@ -85,7 +85,7 @@ for (const name of files) {
 const ids = (text, re) => [...text.matchAll(re)].map(m => m[1]).sort()
 const panel = ids(read('Panel.qml').match(/property var visModes: \[(.*)\]/)[1], /"(\w+)"/g)
 const picker = ids(read('VisPicker.qml'), /\{ id: "(\w+)", name:/g)
-const renderers = ids(read('Player.qml').match(/_renderers: \(\{([\s\S]*?)\}\)/)[1], /"(\w+)":/g)
+const renderers = ids(read('Visualizer.qml').match(/_renderers: \(\{([\s\S]*?)\}\)/)[1], /"(\w+)":/g)
 const shaders = fs.readdirSync(path.join(root, 'shaders')).filter(f => f.endsWith('.qsb')).map(f => f.replace('.frag.qsb', '')).sort()
 assert.deepStrictEqual(renderers, files)
 assert.deepStrictEqual(panel, [...files, ...shaders].sort())
@@ -138,7 +138,8 @@ assert(run('mosaic', 1).state.mosaicCells.every(c => c.threshold >= 0.04), 'mosa
 }
 { // Freshness uses capture time, not changes in the values (steady audio still advances).
   const source = read('Panel.qml').match(/function updateSpectrumData\([\s\S]*?\n  \}/)[0]
-  const now = 10000, root = { opened: true, isPlaying: true, _spectrumSince: now - 300, _lastSpectrumAt: 0, visFrame: 0 }
+  // The bar needs full frames even when the popup is closed.
+  const now = 10000, root = { opened: false, isPlaying: true, _spectrumSince: now - 300, _lastSpectrumAt: 0, visFrame: 0 }
   const receive = new Function('root', 'Date', source + '; return updateSpectrumData')(root, { now: () => now })
   const frame = t => JSON.stringify({ captured_at: t, bands: Array(24).fill(0.4), wave: [-2, 1.5], lr: [0.4, 0] })
   receive(frame(now - 500)); assert.strictEqual(root.visFrame, 0)

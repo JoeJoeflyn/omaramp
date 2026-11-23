@@ -13,53 +13,6 @@ BarWidget {
     (player.isPlaying || player.playbackState === "paused")
   property var pendingPanelCalls: []
 
-  // ---- Equalizer: the bar icon's four bars follow the music (kick, bass, mids, highs).
-  // Each bar mixes how loud its bands are within their recent range with how sharply they
-  // rise over their recent average, so it jumps on a beat and settles between beats, in quiet
-  // songs as in loud ones. Tuned on real music (bars past 70% in about one frame in six).
-  // Without spectrum data (the recorder not running yet) the bars run a canned loop instead.
-  readonly property bool eqLive: !!player && player.visActive === true
-  readonly property var eqGroups: [[2, 5], [6, 10], [11, 16], [17, 22]]   // spectrum.py band ranges
-  property var eqLevels: [0, 0, 0, 0]
-  property var _eqAvg: [-1, -1, -1, -1]
-  property var _eqTop: [0.02, 0.02, 0.02, 0.02]
-  property var _eqPeak: [0, 0, 0, 0]
-  property var _eqFloor: [1, 1, 1, 1]
-
-  onEqLiveChanged: {
-    _eqAvg = [-1, -1, -1, -1]
-    _eqTop = [0.02, 0.02, 0.02, 0.02]
-    _eqPeak = [0, 0, 0, 0]
-    _eqFloor = [1, 1, 1, 1]
-  }
-
-  function updateEq() {
-    if (!eqLive) return
-    var bands = player.visBands
-    var avg = _eqAvg.slice(), top = _eqTop.slice(), peak = _eqPeak.slice(), floor = _eqFloor.slice()
-    var levels = []
-    for (var g = 0; g < 4; g++) {
-      var from = eqGroups[g][0], to = eqGroups[g][1], sum = 0
-      for (var i = from; i <= to; i++) sum += bands[i] || 0
-      var v = sum / (to - from + 1)
-      peak[g] = Math.max(v, peak[g] - 0.01)
-      floor[g] = Math.min(v, floor[g] + 0.01)
-      var loud = Math.max(0, Math.min(1, (v - floor[g]) / Math.max(0.06, peak[g] - floor[g])))
-      if (avg[g] < 0) avg[g] = v
-      var rise = Math.max(0, v - avg[g])
-      avg[g] += 0.25 * (v - avg[g])
-      top[g] = Math.max(rise, top[g] * 0.97, 0.02)
-      levels.push(Math.max(0, Math.min(1, 0.3 * loud + 0.7 * rise / top[g])))
-    }
-    _eqAvg = avg; _eqTop = top; _eqPeak = peak; _eqFloor = floor
-    eqLevels = levels
-  }
-
-  Connections {
-    target: root.player
-    function onVisBandsChanged() { root.updateEq() }
-  }
-
   function withPanel(action) {
     if (player) action(player)
     else {
@@ -161,12 +114,17 @@ BarWidget {
     elideWidth: Style.space(140)
   }
 
-  BarIconButton {
+  // BarIconButton optically shrinks art to glyph size. Give the spectrum a
+  // real, fixed-width drawing surface without changing the button hit target per frame.
+  WidgetButton {
     id: button
     anchors.fill: parent
     bar: root.bar
-    labelText: titleMetrics.text ? titleMetrics.elidedText : ""
-    slotSize: Style.bar.iconSlot + (labelText ? Math.ceil(Math.min(titleMetrics.advanceWidth, titleMetrics.elideWidth)) + Style.space(4) : 0)
+    fontSize: Style.bar.iconFont
+    labelVisible: false
+    hasVisualContent: true
+    fixedWidth: vertical ? -1 : Math.ceil(content.implicitWidth) + Style.space(8)
+    fixedHeight: vertical ? Style.bar.iconSlot : -1
     active: !!root.player && (root.opened || root.player.isPlaying)
     tooltipText: {
       if (!root.hasTrack) return "Omaramp"
@@ -174,79 +132,26 @@ BarWidget {
       return "Omaramp: " + (a ? a + " - " : "") + root.player.currentTrack.slice(0, 300)
     }
 
-    iconComponent: Component {
-      Item {
-        anchors.fill: parent
-
-        // 1. Equalizer while PLAYING. The bars are drawn scaled, not resized: the bar
-        // follows the geometry of everything inside an icon (IconContentBounds), and a
-        // height change on every frame of four looping animations kept the shell's main
-        // thread near a full core for as long as music played. They move even with
-        // Hyprland's animations off: the user wants them as the playing indicator.
-        Row {
-          id: eqBars
-          anchors.centerIn: parent
-          height: Style.space(12)
-          spacing: Style.space(2)
-          visible: panelLoader.item && panelLoader.item.isPlaying
-
-          Repeater {
-            // Each bar's resting height and the heights it moves through, in twelfths, with the ms per move
-            model: [
-              { rest: 4, to: [11, 4, 9, 3], ms: [320, 280, 240, 260] },
-              { rest: 10, to: [3, 12, 6, 11], ms: [250, 340, 220, 290] },
-              { rest: 7, to: [12, 5, 10, 4], ms: [290, 270, 310, 230] },
-              { rest: 5, to: [4, 11, 5, 9], ms: [260, 310, 240, 280] }
-            ]
-
-            delegate: Rectangle {
-              id: eqBar
-              required property var modelData
-              required property int index
-              readonly property real liveLevel: root.eqLevels[index] || 0
-              width: Style.space(2)
-              height: eqBars.height
-              radius: 1
-              color: root.bar ? (root.bar.barForeground || root.bar.foreground || "#ffffff") : "#ffffff"
-              transform: Scale {
-                id: eqScale
-                origin.y: eqBar.height
-                yScale: eqBar.modelData.rest / 12
-                // Glides between spectrum frames, which come about 21 times a second
-                Behavior on yScale {
-                  enabled: root.eqLive
-                  NumberAnimation { duration: 60; easing.type: Easing.OutQuad }
-                }
-              }
-
-              onLiveLevelChanged: if (root.eqLive) eqScale.yScale = 0.15 + 0.85 * liveLevel
-
-              SequentialAnimation {
-                running: eqBars.visible && !root.eqLive
-                loops: Animation.Infinite
-                onStopped: eqScale.yScale = eqBar.modelData.rest / 12
-                NumberAnimation { target: eqScale; property: "yScale"; to: eqBar.modelData.to[0] / 12; duration: eqBar.modelData.ms[0]; easing.type: Easing.InOutQuad }
-                NumberAnimation { target: eqScale; property: "yScale"; to: eqBar.modelData.to[1] / 12; duration: eqBar.modelData.ms[1]; easing.type: Easing.InOutQuad }
-                NumberAnimation { target: eqScale; property: "yScale"; to: eqBar.modelData.to[2] / 12; duration: eqBar.modelData.ms[2]; easing.type: Easing.InOutQuad }
-                NumberAnimation { target: eqScale; property: "yScale"; to: eqBar.modelData.to[3] / 12; duration: eqBar.modelData.ms[3]; easing.type: Easing.InOutQuad }
-              }
-            }
-          }
-        }
-
-        // 2. Static Icon when STOPPED or PAUSED
-        Text {
-          anchors.centerIn: parent
-          visible: !panelLoader.item || !panelLoader.item.isPlaying
-          text: (panelLoader.item && panelLoader.item.playbackState === "paused") ? "\uf04c" : "\uf001"
-          font.family: root.bar ? root.bar.fontFamily : Style.font.family
-          font.pixelSize: Style.bar.iconFont
-          color: (panelLoader.item && panelLoader.item.opened)
-            ? (root.bar ? (root.bar.barForeground || root.bar.foreground || "#ffffff") : "#ffffff")
-            : ((panelLoader.item && panelLoader.item.playbackState === "paused")
-                ? (panelLoader.item ? panelLoader.item.dim : Color.foreground)
-                : (root.bar ? root.bar.foreground : Color.foreground))
-        }
+    Row {
+      id: content
+      anchors.centerIn: parent
+      spacing: Style.space(4)
+      scale: button.pressScale
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        visible: text !== ""
+        text: titleMetrics.text ? titleMetrics.elidedText : ""
+        textFormat: Text.PlainText
+        color: button.active ? button.activeColor : button.foreground
+        font.family: button.fontFamily
+        font.pixelSize: button.fontSize
+      }
+      BarWaveform {
+        anchors.verticalCenter: parent.verticalCenter
+        width: button.vertical ? Math.max(1, button.barSize - Style.space(6)) : Style.space(48)
+        height: Math.min(button.barSize, Style.space(18))
+        player: root.player
+        foreground: button.foreground
       }
     }
 
