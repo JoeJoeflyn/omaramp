@@ -149,8 +149,9 @@ BarWidget {
       }
       BarWaveform {
         anchors.verticalCenter: parent.verticalCenter
-        // Playback changes the artwork, not the space it takes on the bar.
-        width: Math.max(1, button.vertical ? button.barSize - Style.space(6) : Style.bar.iconSlot - button.slotPadding)
+        // Widen the live art, not the padding around the four-bar idle icon.
+        width: button.vertical ? Math.max(1, button.barSize - Style.space(6))
+          : live ? Style.space(48) : Math.max(1, Style.bar.iconSlot - button.slotPadding)
         height: Math.min(button.barSize, Style.space(18))
         player: root.player
         foreground: button.foreground

@@ -34,7 +34,7 @@ Inspired by Winamp & [cliamp](https://github.com/brianstrauch/cliamp).
 - **Full Transport Deck**: Play/Pause, Next, Prev, Stop, Shuffle, Repeat, Volume slider, and Speed controls (0.5x–2.0x).
 - **Keyboard Shortcuts**: `Space` (play/pause), `Left`/`Right` (seek), `Up`/`Down` (volume), `/` (search), `m` (mute), `Esc` (close).
 - **Spectrum capture**: Uses the default audio output’s monitor while playing or while the panel is open. Pausing or losing fresh audio frames clears the visualizer.
-- **Status Bar Widget**: The icon stays one standard slot wide. It shows the selected visualizer during playback, even with the popup closed, and the classic four bars when paused, stopped, or waiting for audio. It can also display an elided track title on horizontal bars. Full track details remain in the tooltip.
+- **Status Bar Widget**: The selected visualizer stays visible during playback, even with the popup closed, and uses a 48-pixel canvas at the default scale on horizontal bars. When paused, stopped, or waiting for audio, the classic four bars fit in one standard icon slot. It can also display an elided track title on horizontal bars. Full track details remain in the tooltip.
   - **Left Click**: Toggle popup player panel.
   - **Middle Click**: Instant Play/Pause toggle.
   - **Right Click**: Skip to next track.
