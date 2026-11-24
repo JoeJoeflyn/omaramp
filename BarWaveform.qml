@@ -12,23 +12,19 @@ Item {
     sourceComponent: Visualizer { p: root.player; compact: true }
   }
 
-  // The icon is still a waveform before the first track, while paused and if
-  // capture drops out. No fake animation or idle audio capture.
+  // The old equalizer at its resting heights, with all four bars on one baseline.
   Row {
-    id: rest
     visible: !root.live
     anchors.centerIn: parent
-    height: parent.height
-    spacing: Math.max(1, Math.floor(root.width / 20))
-    readonly property var levels: [0.23, 0.48, 0.78, 0.43, 1, 0.65, 0.34, 0.74, 0.45, 0.23]
+    height: 12
+    spacing: 2
+    scale: root.height / 18
     Repeater {
-      model: rest.levels
+      model: [4, 10, 7, 5]
       Rectangle {
-        required property real modelData
-        anchors.verticalCenter: parent.verticalCenter
-        width: Math.max(1, (root.width - (rest.levels.length - 1) * rest.spacing) / rest.levels.length)
-        height: Math.max(2, Math.round(rest.height * modelData))
-        radius: width / 2
+        required property int modelData
+        anchors.bottom: parent.bottom
+        width: 2; height: modelData; radius: 1
         color: root.foreground
       }
     }

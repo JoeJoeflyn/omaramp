@@ -123,7 +123,8 @@ BarWidget {
     fontSize: Style.bar.iconFont
     labelVisible: false
     hasVisualContent: true
-    fixedWidth: vertical ? -1 : Math.ceil(content.implicitWidth) + Style.space(8)
+    readonly property int slotPadding: Style.space(8)
+    fixedWidth: vertical ? -1 : Math.ceil(content.implicitWidth) + slotPadding
     fixedHeight: vertical ? Style.bar.iconSlot : -1
     active: !!root.player && (root.opened || root.player.isPlaying)
     tooltipText: {
@@ -148,7 +149,8 @@ BarWidget {
       }
       BarWaveform {
         anchors.verticalCenter: parent.verticalCenter
-        width: button.vertical ? Math.max(1, button.barSize - Style.space(6)) : Style.space(48)
+        // Playback changes the artwork, not the space it takes on the bar.
+        width: Math.max(1, button.vertical ? button.barSize - Style.space(6) : Style.bar.iconSlot - button.slotPadding)
         height: Math.min(button.barSize, Style.space(18))
         player: root.player
         foreground: button.foreground
